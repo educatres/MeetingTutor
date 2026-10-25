@@ -1,4 +1,4 @@
-# MeetingTutor 會議記錄轉錄器
+# MeetingTutor 會議記錄、上課錄音助教
 
 目前 repository 已完成第一版 MVP；規格文件仍是後續擴充與驗收的基準。
 

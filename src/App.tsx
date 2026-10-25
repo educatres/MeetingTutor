@@ -46,15 +46,6 @@ function initialProviderConfig(): ProviderConfig {
   }
 }
 
-function download(name: string, content: string, type = 'text/plain;charset=utf-8') {
-  const url = URL.createObjectURL(new Blob([content], { type }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = name
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
 function formatSeconds(seconds: number) {
   if (seconds < 0) return '--:--'
   const minutes = Math.floor(seconds / 60).toString().padStart(2, '0')
@@ -64,13 +55,7 @@ function formatSeconds(seconds: number) {
 
 type ModelTestStatus = 'idle' | 'testing' | 'available' | 'empty' | 'error'
 type GenerationStatus = { kind: 'working' | 'success' | 'error'; message: string }
-type OutputPreviewTarget = 'minutes' | 'actions' | 'agenda'
 type RecordTemplate = 'meeting' | 'class'
-const OUTPUT_ITEMS: Array<{ key: OutputPreviewTarget; label: string; filename: string; mime: string }> = [
-  { key: 'minutes', label: '完整記錄（純文字）', filename: '01_完整記錄.txt', mime: 'text/plain;charset=utf-8' },
-  { key: 'actions', label: '本次待辦事項（HTML 表格）', filename: '02_本次待辦事項.html', mime: 'text/html;charset=utf-8' },
-  { key: 'agenda', label: '下次會議議程（HTML 表格）', filename: '03_下次會議議程.html', mime: 'text/html;charset=utf-8' },
-]
 const SYSTEM_PROMPT_EXAMPLES = [
   { label: '正式會議紀錄', prompt: '請將口語內容整理為正式、精簡的繁體中文，保留原意與各方立場，不新增逐字稿未提及的事實。', template: 'meeting' as const },
   { label: '決議與待辦優先', prompt: '請優先整理會議決議、待辦事項、負責人、期限與未決問題；逐字稿沒有明確資訊時請標示「待確認」，不要自行推測。', template: 'meeting' as const },
@@ -98,7 +83,6 @@ export default function App() {
   const [status, setStatus] = useState('請選擇音訊檔或開始錄音。')
   const [busy, setBusy] = useState(false)
   const [output, setOutput] = useState<MeetingOutput | null>(null)
-  const [outputPreviewTarget, setOutputPreviewTarget] = useState<OutputPreviewTarget | null>(null)
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus | null>(null)
   const [recordTemplate, setRecordTemplate] = useState<RecordTemplate>(() => storedSystemPrompt().includes('上課錄音') ? 'class' : 'meeting')
   const [generatedTemplate, setGeneratedTemplate] = useState<RecordTemplate>('meeting')
@@ -111,6 +95,7 @@ export default function App() {
     return !saved.apiKey || !saved.modelId
   })
   const liveTranscriptRef = useRef<HTMLDivElement | null>(null)
+  const outputResultRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     try {
@@ -138,10 +123,11 @@ export default function App() {
     if (box) box.scrollTop = box.scrollHeight
   }, [segments])
 
+  useEffect(() => {
+    if (output) outputResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [output])
+
   const transcriptText = useMemo(() => segments.map((segment) => segment.text).join(' '), [segments])
-  const outputItems = useMemo(() => OUTPUT_ITEMS.map((item) => item.key === 'minutes'
-    ? { ...item, label: generatedTemplate === 'class' ? '完整課堂筆記（純文字）' : '完整會議記錄摘要（純文字）', filename: generatedTemplate === 'class' ? '01_完整課堂筆記.txt' : '01_完整會議記錄摘要.txt' }
-    : item), [generatedTemplate])
 
   const checkHardware = async () => {
     const cores = navigator.hardwareConcurrency ?? 0
@@ -355,7 +341,6 @@ export default function App() {
       return
     }
     setBusy(true)
-    setOutputPreviewTarget(null)
     setGenerationStatus({ kind: 'working', message: `正在使用 ${config.modelId} 整理${recordTemplate === 'class' ? '課堂筆記' : '會議記錄摘要'}，請稍候…` })
     try {
       const prompt = createPrompt(segments, references, glossary, language, recordTemplate)
@@ -375,7 +360,7 @@ export default function App() {
       ) : undefined
       setOutput({ minutes, actions, agenda })
       setGeneratedTemplate(recordTemplate)
-      const message = '整理完成，可直接預覽或下載會議成果。'
+      const message = '整理完成，成果已直接顯示在下方。'
       setGenerationStatus({ kind: 'success', message })
       setStatus(message)
       setSettingsOpen(false)
@@ -394,7 +379,7 @@ export default function App() {
 
   return <div className="app-shell">
     <header className="hero">
-      <div className="hero-main"><p className="eyebrow">MeetingTutor</p><h1>會議記錄轉錄器</h1><div className="hardware-row"><p className="hardware-note">最低硬體建議：四核心現代處理器、8 GB RAM、至少 2 GB 可用空間；使用最新版 Chrome／Edge／Firefox，WebGPU 可用時速度較佳。</p><div className="header-actions"><button className="hardware-button" onClick={checkHardware}>檢測我的硬體</button><button className={config.apiKey && config.modelId ? 'settings-toggle is-ready' : 'settings-toggle'} type="button" onClick={() => setSettingsOpen((current) => !current)} aria-expanded={settingsOpen}><span>AI 設定</span><small>{config.apiKey && config.modelId ? `${providerLabel(config.id)}｜${config.modelId}` : '尚未完成設定'}</small></button></div></div>{hardwareResult && <p className="hardware-result" role="status">{hardwareResult}</p>}</div>
+      <div className="hero-main"><p className="eyebrow">MeetingTutor</p><h1>會議記錄、上課錄音助教</h1><div className="hardware-row"><p className="hardware-note">最低硬體建議：四核心現代處理器、8 GB RAM、至少 2 GB 可用空間；使用最新版 Chrome／Edge／Firefox，WebGPU 可用時速度較佳。</p><div className="header-actions"><button className="hardware-button" onClick={checkHardware}>檢測我的硬體</button><button className={config.apiKey && config.modelId ? 'settings-toggle is-ready' : 'settings-toggle'} type="button" onClick={() => setSettingsOpen((current) => !current)} aria-expanded={settingsOpen}><span>AI 設定</span><small>{config.apiKey && config.modelId ? `${providerLabel(config.id)}｜${config.modelId}` : '尚未完成設定'}</small></button></div></div>{hardwareResult && <p className="hardware-result" role="status">{hardwareResult}</p>}</div>
       <div className="privacy-badge">🔒 音訊預設只在本機處理<br /><small>API Key 不會寫入專案</small></div>
       {settingsOpen && <section className="ai-settings-panel" aria-label="AI 模型設定">
         <div className="settings-panel-heading"><div><h2>AI 模型設定</h2><p>設定會保存在此瀏覽器；連線正常時，下次開啟可直接沿用。</p></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="關閉 AI 設定">關閉</button></div>
@@ -404,7 +389,7 @@ export default function App() {
     </header>
 
     <main className="workspace">
-      <section className="panel"><div className="section-heading"><span className="step">1</span><div><h2>取得音訊</h2><p>轉寫語言預設為中文，也可選擇英文。</p></div></div>
+      <section className="panel"><div className="section-heading"><span className="step">1</span><div><h2>取得音訊或上傳逐字稿</h2><p>轉寫語言預設為中文，也可選擇英文。</p></div></div>
         <div className="controls-row"><label className="field"><span>轉寫語言</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} disabled={busy}><option value="zh">中文（繁體／多語模型）</option><option value="en">English（英文模型）</option></select></label><label className="field"><span>Whisper 模型</span><select value={whisperModel} onChange={(event) => setWhisperModel(event.target.value as 'tiny' | 'base' | 'medium')} disabled={busy}><option value="medium">Whisper-medium（最準確、需要較多記憶體）</option><option value="base">Whisper-base（預設，較準確）</option><option value="tiny">Whisper-tiny（較快、較省資源）</option></select></label><label className="file-picker"><span>選擇音訊</span><input type="file" accept="audio/*,video/*" onChange={onAudioChange} disabled={busy} /></label><button className="secondary" onClick={recording ? stopRecording : startRecording} disabled={busy}>{recording ? '停止錄音' : '開始錄音'}</button></div>
         <div className="controls-row transcript-upload-row"><label className="file-picker wide"><span>或上傳 Teams 逐字稿（.vtt／.txt／.srt）</span><input type="file" accept=".vtt,.txt,.srt,text/vtt,text/plain" onChange={onTranscriptChange} disabled={busy} /></label></div>
         {audioFile && <p className="file-note">已準備：{audioFile.name}（{Math.round(audioFile.size / 1024)} KB）</p>}
@@ -432,10 +417,9 @@ export default function App() {
         {recordTemplate === 'meeting' && <div className="output-options"><strong>選擇額外輸出</strong><span>完整會議記錄摘要固定產生，其他文件可依需要勾選。</span><label><input type="checkbox" checked={includeActions} onChange={(event) => setIncludeActions(event.target.checked)} disabled={busy} />輸出待辦事項</label><label><input type="checkbox" checked={includeAgenda} onChange={(event) => setIncludeAgenda(event.target.checked)} disabled={busy} />輸出下次議程</label></div>}
         <div className="controls-row"><button className="primary" onClick={generate} disabled={busy}>{generationStatus?.kind === 'working' ? '整理中…' : recordTemplate === 'class' ? '整理課堂筆記' : '整理會議記錄'}</button></div>
         {generationStatus && <p className={`generation-status is-${generationStatus.kind}`} role={generationStatus.kind === 'error' ? 'alert' : 'status'}>{generationStatus.message}</p>}
-        {output && <div className="output-ready" role="status">
-          <div className="output-ready-heading"><strong>整理完成</strong><span>可先預覽內容，再下載需要的文件。</span></div>
-          <div className="output-files">{outputItems.filter((item) => output[item.key]).map((item) => <div className="output-file" key={item.key}><strong>{item.label}</strong><div className="output-file-actions"><button className={outputPreviewTarget === item.key ? 'preview-button is-active' : 'preview-button'} onClick={() => setOutputPreviewTarget((current) => current === item.key ? null : item.key)}>{outputPreviewTarget === item.key ? '收起預覽' : '預覽'}</button><button onClick={() => download(item.filename, output[item.key]!, item.mime)}>下載</button></div></div>)}</div>
-          {outputPreviewTarget && output[outputPreviewTarget] && <div className="output-single-preview"><div className="output-preview-heading"><h3>{outputItems.find((item) => item.key === outputPreviewTarget)?.label}預覽</h3><button type="button" onClick={() => setOutputPreviewTarget(null)}>關閉</button></div>{outputPreviewTarget === 'actions' || outputPreviewTarget === 'agenda' ? <iframe className="html-preview-frame" title={`${outputItems.find((item) => item.key === outputPreviewTarget)?.label}預覽`} srcDoc={output[outputPreviewTarget]} sandbox="allow-modals allow-scripts" /> : <pre>{output[outputPreviewTarget]}</pre>}</div>}
+        {output && <div className="output-ready" role="status" ref={outputResultRef}>
+          <div className="output-ready-heading"><strong>整理完成</strong><span>結果已直接顯示於下方。</span></div>
+          <div className="output-results"><section className="output-result"><h3>{generatedTemplate === 'class' ? '完整課堂筆記' : '完整會議記錄摘要'}</h3><pre>{output.minutes}</pre></section>{output.actions && <section className="output-result"><h3>本次待辦事項</h3><iframe className="html-preview-frame" title="本次待辦事項" srcDoc={output.actions} sandbox="allow-modals allow-scripts" /></section>}{output.agenda && <section className="output-result"><h3>下次會議議程</h3><iframe className="html-preview-frame" title="下次會議議程" srcDoc={output.agenda} sandbox="allow-modals allow-scripts" /></section>}</div>
         </div>}
       </section>
     </main>
