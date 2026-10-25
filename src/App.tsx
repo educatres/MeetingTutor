@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import './styles.css'
-import type { GlossarySuggestion, GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, ReferenceDocument, TranscriptSegment } from './types'
+import type { GlossarySuggestion, GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, RecordTemplate, ReferenceDocument, TranscriptSegment } from './types'
 import { PROVIDERS, generateText, isAllowedTextModel, listModels, providerLabel } from './lib/providers'
 import { readReference } from './lib/references'
-import { cleanPlainTextOutput, createGlossaryPrompt, createPrompt, extractPlainTextSection, parseGlossarySuggestions } from './lib/outputs'
+import { cleanPlainTextOutput, createGlossaryPrompt, createPolishedTranscriptPrompt, createPrompt, extractPlainTextSection, parseGlossarySuggestions, parsePolishedTranscript } from './lib/outputs'
 import { transcribe } from './lib/transcription'
 import { parseTeamsTranscript } from './lib/transcript'
 
@@ -61,6 +61,24 @@ function transcriptTextForDownload(segments: TranscriptSegment[]) {
   }).join('\n')
 }
 
+function formatSrtTime(seconds: number) {
+  const safe = Math.max(0, Number.isFinite(seconds) ? seconds : 0)
+  const hours = Math.floor(safe / 3600).toString().padStart(2, '0')
+  const minutes = Math.floor((safe % 3600) / 60).toString().padStart(2, '0')
+  const rest = safe % 60
+  const wholeSeconds = Math.floor(rest).toString().padStart(2, '0')
+  const milliseconds = Math.floor((rest - Math.floor(rest)) * 1000).toString().padStart(3, '0')
+  return `${hours}:${minutes}:${wholeSeconds},${milliseconds}`
+}
+
+function subtitleTextForDownload(segments: TranscriptSegment[]) {
+  return segments.map((segment, index) => {
+    const nextStart = segments[index + 1]?.start
+    const end = segment.end > segment.start ? segment.end : (typeof nextStart === 'number' && nextStart > segment.start ? nextStart : segment.start + 2)
+    return `${index + 1}\n${formatSrtTime(segment.start)} --> ${formatSrtTime(end)}\n${segment.text}\n`
+  }).join('\n')
+}
+
 function downloadTextFile(name: string, content: string) {
   const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: 'text/plain;charset=utf-8' }))
   const link = document.createElement('a')
@@ -72,7 +90,18 @@ function downloadTextFile(name: string, content: string) {
 
 type ModelTestStatus = 'idle' | 'testing' | 'available' | 'empty' | 'error'
 type GenerationStatus = { kind: 'working' | 'success' | 'error'; message: string }
-type RecordTemplate = 'meeting' | 'class'
+const RECORD_TEMPLATE_OPTIONS: Array<{ id: RecordTemplate; label: string; headings: string }> = [
+  { id: 'meeting', label: '會議記錄摘要', headings: '會議摘要、討論重點、決議事項、待辦事項、後續安排' },
+  { id: 'class', label: '上課錄音／課堂筆記', headings: '課程摘要、學習目標、核心概念、主題重點、例子、作業與待釐清問題' },
+  { id: 'memo', label: '工作備忘錄', headings: '重點摘要、目前進度、待處理事項、重要決定、後續追蹤' },
+  { id: 'experiment', label: '口述實驗記錄', headings: '實驗目的、材料設備、操作步驟、觀察結果、異常原因、結論' },
+  { id: 'journal', label: '個人日誌', headings: '事件與經過、想法與感受、重要收穫、待辦與明日計畫' },
+]
+
+function recordTemplateLabel(template: RecordTemplate) {
+  return RECORD_TEMPLATE_OPTIONS.find((item) => item.id === template)?.label ?? template
+}
+
 const SYSTEM_PROMPT_EXAMPLES = [
   { label: '正式會議紀錄', prompt: '請將口語內容整理為正式、精簡的繁體中文，保留原意與各方立場，不新增逐字稿未提及的事實。', template: 'meeting' as const },
   { label: '決議與待辦優先', prompt: '請優先整理會議決議、待辦事項、負責人、期限與未決問題；逐字稿沒有明確資訊時請標示「待確認」，不要自行推測。', template: 'meeting' as const },
@@ -102,11 +131,13 @@ export default function App() {
   const [status, setStatus] = useState('狀態/進度')
   const [busy, setBusy] = useState(false)
   const [output, setOutput] = useState<MeetingOutput | null>(null)
+  const [polishedSegments, setPolishedSegments] = useState<TranscriptSegment[]>([])
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus | null>(null)
   const [recordTemplate, setRecordTemplate] = useState<RecordTemplate>(() => storedSystemPrompt().includes('上課錄音') ? 'class' : 'meeting')
   const [generatedTemplate, setGeneratedTemplate] = useState<RecordTemplate>('meeting')
   const [includeActions, setIncludeActions] = useState(false)
   const [includeAgenda, setIncludeAgenda] = useState(false)
+  const [templateHelpOpen, setTemplateHelpOpen] = useState(false)
   const [hardwareResult, setHardwareResult] = useState<string | null>(null)
   const [showKey, setShowKey] = useState(false)
   const [testPreviewOpen, setTestPreviewOpen] = useState(false)
@@ -192,6 +223,7 @@ export default function App() {
     const file = event.target.files?.[0] ?? null
     setAudioFile(file)
     setSegments([])
+    setPolishedSegments([])
     if (file) {
       setTranscriptFile(null)
       setUploadedTranscriptSegments([])
@@ -204,6 +236,7 @@ export default function App() {
     setTranscriptFile(file)
     setUploadedTranscriptSegments([])
     setSegments([])
+    setPolishedSegments([])
     if (!file) return
     setAudioFile(null)
     setBusy(true)
@@ -223,6 +256,7 @@ export default function App() {
       setTranscriptFile(null)
       setUploadedTranscriptSegments([])
       setSegments([])
+      setPolishedSegments([])
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const recorder = new MediaRecorder(stream)
       const chunks: Blob[] = []
@@ -256,6 +290,14 @@ export default function App() {
     const baseName = audioFile?.name.replace(/\.[^.]+$/, '') || `meeting-${new Date().toISOString().slice(0, 10)}`
     downloadTextFile(`${baseName}-逐字稿.txt`, transcriptTextForDownload(segments))
     setStatus('逐字稿已下載。')
+  }
+
+  const downloadPolishedTranscript = () => {
+    if (!polishedSegments.length) return
+    const sourceName = audioFile?.name || transcriptFile?.name
+    const baseName = sourceName?.replace(/\.[^.]+$/, '') || `meeting-${new Date().toISOString().slice(0, 10)}`
+    downloadTextFile(`${baseName}-YouTube字幕.srt`, subtitleTextForDownload(polishedSegments))
+    setStatus('YouTube 字幕檔已下載。')
   }
 
   const runTranscription = async () => {
@@ -294,7 +336,7 @@ export default function App() {
     try {
       const parsed = await Promise.all(files.map(readReference))
       setReferences((current) => [...current, ...parsed])
-      setStatus(`已加入 ${parsed.length} 份參考資料。掃描型 PDF 若沒有文字層，需先 OCR。`)
+      setStatus(`已加入 ${parsed.length} 份參考資料。`)
     } catch (error) {
       setStatus(`讀取參考資料失敗：${error instanceof Error ? error.message : String(error)}`)
     } finally { setBusy(false) }
@@ -376,7 +418,7 @@ export default function App() {
 
   const changeRecordTemplate = (template: RecordTemplate) => {
     setRecordTemplate(template)
-    if (template === 'class') {
+    if (template !== 'meeting') {
       setIncludeActions(false)
       setIncludeAgenda(false)
     }
@@ -406,11 +448,19 @@ export default function App() {
       return
     }
     setBusy(true)
-    setGenerationStatus({ kind: 'working', message: `正在使用 ${config.modelId} 整理${recordTemplate === 'class' ? '課堂筆記' : '會議記錄摘要'}，請稍候…` })
+    setGenerationStatus({ kind: 'working', message: `正在使用 ${config.modelId} 整理${recordTemplateLabel(recordTemplate)}，請稍候…` })
     try {
       const prompt = createPrompt(segments, references, glossary, language, recordTemplate)
       const generatedText = await generateText(config, prompt, systemPrompt)
       const minutes = cleanPlainTextOutput(generatedText || transcriptText)
+      let polished = segments
+      try {
+        const polishedResponse = await generateText(config, createPolishedTranscriptPrompt(segments, language), systemPrompt)
+        polished = parsePolishedTranscript(polishedResponse, segments)
+      } catch {
+        polished = segments
+      }
+      setPolishedSegments(polished)
       const actions = includeActions ? extractPlainTextSection(minutes, ['待辦事項', '待辦', '行動項目']) || undefined : undefined
       const agenda = includeAgenda ? extractPlainTextSection(minutes, ['下次會議議程', '下次議程', '後續安排']) || undefined : undefined
       setOutput({ minutes, actions, agenda })
@@ -433,7 +483,7 @@ export default function App() {
 
   return <div className="app-shell">
     <header className="hero">
-      <div className="hero-main"><p className="eyebrow">MeetingTutor</p><h1>會議記錄、上課錄音助教</h1><div className="header-actions"><button className={config.apiKey && config.modelId ? 'settings-toggle is-ready' : 'settings-toggle'} type="button" onClick={() => setSettingsOpen(true)} aria-expanded={settingsOpen}><span>AI 設定</span><small>{config.apiKey && config.modelId ? `${providerLabel(config.id)}｜${config.modelId}` : '尚未完成設定'}</small></button></div>{hardwareResult && <p className="hardware-result" role="status">{hardwareResult}</p>}</div>
+      <div className="hero-main"><div className="hero-heading-row"><div className="hero-title-block"><p className="eyebrow">MeetingTutor</p><h1>會議記錄、上課錄音助教</h1></div><div className="header-actions"><button className={config.apiKey && config.modelId ? 'settings-toggle is-ready' : 'settings-toggle'} type="button" onClick={() => setSettingsOpen(true)} aria-expanded={settingsOpen}><span>AI 設定</span><small>{config.apiKey && config.modelId ? `${providerLabel(config.id)}｜${config.modelId}` : '尚未完成設定'}</small></button></div></div>{hardwareResult && <p className="hardware-result" role="status">{hardwareResult}</p>}</div>
       {settingsOpen && <section className="ai-settings-panel" aria-label="AI 模型設定">
         <div className="settings-panel-heading"><div><h2>AI 模型設定</h2><p>設定會保存在此瀏覽器；連線正常時，下次開啟可直接沿用。</p></div></div>
         <div className="provider-grid"><label className="field"><span>Provider</span><select value={config.id} onChange={(e) => updateProvider(e.target.value as ProviderId)} disabled={busy}>{PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label><label className="field"><span>API Key（保存在本機瀏覽器）</span><div className="key-input"><input type={showKey ? 'text' : 'password'} value={config.apiKey} onChange={(e) => updateApiKey(e.target.value)} autoComplete="off" placeholder="貼上你的 Key" disabled={busy} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? '隱藏' : '顯示'}</button><button type="button" onClick={clearApiKeys} disabled={busy}>清除 API Key</button></div></label><label className="field"><span>API Base URL</span><input value={config.baseUrl ?? ''} onChange={(e) => updateBaseUrl(e.target.value)} disabled={busy} /></label>{config.id === 'cgu' && <label className="field"><span>CGU 推理程度（預設：中）</span><select value={config.reasoningEffort ?? 'medium'} onChange={(e) => setConfig((current) => ({ ...current, reasoningEffort: e.target.value as ReasoningEffort }))} disabled={busy}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>}</div>
@@ -469,19 +519,20 @@ export default function App() {
       </section>
 
       <section className="panel output-panel">
-        <div className="section-heading"><span className="step">3</span><div><h2>產生記錄成果</h2><p>選擇適合的記錄模板與整理方向，再使用頁首保存的 AI 模型產生可直接使用的純文字記錄。</p></div></div>
-        <div className="record-template"><strong>記錄模板</strong><label><input type="radio" name="record-template" value="meeting" checked={recordTemplate === 'meeting'} onChange={() => changeRecordTemplate('meeting')} disabled={busy} />會議記錄摘要</label><label><input type="radio" name="record-template" value="class" checked={recordTemplate === 'class'} onChange={() => changeRecordTemplate('class')} disabled={busy} />上課錄音／課堂筆記</label></div>
+        <div className="section-heading"><span className="step">3</span><div><h2>產生摘要</h2><p>選擇適合的記錄模板與整理方向，再使用頁首保存的 AI 模型產生可直接使用的純文字記錄。</p></div></div>
+        <div className="record-template"><strong>記錄模板</strong><button className="template-info-button" type="button" onClick={() => setTemplateHelpOpen((current) => !current)} aria-expanded={templateHelpOpen} aria-label="查看模板內容">i</button>{RECORD_TEMPLATE_OPTIONS.map((template) => <label key={template.id}><input type="radio" name="record-template" value={template.id} checked={recordTemplate === template.id} onChange={() => changeRecordTemplate(template.id)} disabled={busy} />{template.label}</label>)}</div>
+        {templateHelpOpen && <div className="template-help" role="note"><strong>模板內容</strong><ul>{RECORD_TEMPLATE_OPTIONS.map((template) => <li key={template.id}><b>{template.label}</b>：{template.headings}</li>)}</ul></div>}
         <div className="system-prompt-panel">
           <label className="field"><span>AI 修正方向（System Prompt）</span><textarea value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} rows={5} maxLength={6000} disabled={busy} placeholder="例如：保留講者原意，將口語改為正式繁體中文；專有名詞不要自行猜測；摘要優先列出決議、負責人與期限。" /></label>
           <div className="system-prompt-examples"><span>快速範例（可複選，點擊後追加）</span><div>{SYSTEM_PROMPT_EXAMPLES.map((example) => <button type="button" key={example.label} onClick={() => addSystemPromptExample(example)} disabled={busy || systemPrompt.includes(example.prompt)} title={example.prompt}>{example.label}</button>)}</div></div>
           <div className="system-prompt-meta"><span>自動保存在此瀏覽器，重新整理後仍會保留。{systemPrompt.length.toLocaleString()} / 6,000 字</span><button type="button" className="secondary" onClick={() => setSystemPrompt('')} disabled={busy || !systemPrompt}>清除指示</button></div>
         </div>
         {recordTemplate === 'meeting' && <div className="output-options"><strong>選擇額外輸出</strong><span>待辦事項與下次議程會由 AI 根據會議記錄內容整理成純文字；找不到內容時不顯示。</span><label><input type="checkbox" checked={includeActions} onChange={(event) => setIncludeActions(event.target.checked)} disabled={busy} />輸出待辦事項</label><label><input type="checkbox" checked={includeAgenda} onChange={(event) => setIncludeAgenda(event.target.checked)} disabled={busy} />輸出下次議程</label></div>}
-        <div className="action-row-centered"><button className="primary" onClick={generate} disabled={busy}>{generationStatus?.kind === 'working' ? '整理中…' : recordTemplate === 'class' ? '整理課堂筆記' : '整理會議記錄'}</button></div>
+        <div className="action-row-centered"><button className="primary" onClick={generate} disabled={busy}>{generationStatus?.kind === 'working' ? '整理中…' : recordTemplateLabel(recordTemplate)}</button></div>
         {generationStatus && <p className={`generation-status is-${generationStatus.kind}`} role={generationStatus.kind === 'error' ? 'alert' : 'status'}>{generationStatus.message}</p>}
         {output && <div className="output-ready" role="status" ref={outputResultRef}>
           <div className="output-ready-heading"><strong>整理完成</strong><span>結果已直接顯示於下方。</span></div>
-          <div className="output-results"><section className="output-result"><h3>{generatedTemplate === 'class' ? '完整課堂筆記' : '完整會議記錄摘要'}</h3><pre>{output.minutes}</pre></section>{output.actions && <section className="output-result"><h3>本次待辦事項</h3><pre>{output.actions}</pre></section>}{output.agenda && <section className="output-result"><h3>下次會議議程</h3><pre>{output.agenda}</pre></section>}</div>
+          <div className="output-results"><section className="output-result"><h3>{recordTemplateLabel(generatedTemplate)}</h3><pre>{output.minutes}</pre></section>{output.actions && <section className="output-result"><h3>本次待辦事項</h3><pre>{output.actions}</pre></section>}{output.agenda && <section className="output-result"><h3>下次會議議程</h3><pre>{output.agenda}</pre></section>}{polishedSegments.length > 0 && <section className="output-result polished-transcript-result"><div className="polished-transcript-heading"><div><h3>文字潤飾後逐字稿</h3><p>保留原始時間標記，可直接下載為 YouTube 字幕 SRT 檔。</p></div><button className="secondary" type="button" onClick={downloadPolishedTranscript}>下載 YouTube 字幕（SRT）</button></div><div className="polished-transcript-list">{polishedSegments.map((segment, index) => { const nextStart = polishedSegments[index + 1]?.start; const end = segment.end > segment.start ? segment.end : (typeof nextStart === 'number' && nextStart > segment.start ? nextStart : segment.start + 2); return <div className="polished-transcript-row" key={segment.id}><span className="polished-transcript-time">{formatSrtTime(segment.start)} → {formatSrtTime(end)}</span><span>{segment.text}</span></div> })}</div></section>}</div>
         </div>}
       </section>
     </main>

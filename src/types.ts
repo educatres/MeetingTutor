@@ -1,4 +1,5 @@
 export type Language = 'zh' | 'en'
+export type RecordTemplate = 'meeting' | 'class' | 'memo' | 'experiment' | 'journal'
 
 export type ProviderId = 'openai' | 'xai' | 'google' | 'cgu'
 export type ReasoningEffort = 'low' | 'medium' | 'high'
