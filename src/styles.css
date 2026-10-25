@@ -72,6 +72,10 @@ button { cursor: pointer; }
 .reference-list button { border: 0; background: none; color: #a14343; }
 .model-select { margin-top: 14px; max-width: 100%; }
 .output-panel { border-color: #a9c7d4; }
+.generation-status { margin: 12px 0 0; padding: 11px 13px; border: 1px solid transparent; border-radius: 8px; font-size: 14px; }
+.generation-status.is-working { color: #285268; background: #edf6f9; border-color: #b8d5e0; }
+.generation-status.is-success { color: #17633b; background: #edf9f1; border-color: #a9d2bd; }
+.generation-status.is-error { color: #8a2929; background: #fff1f1; border-color: #e2b3b3; }
 .output-ready { margin-top: 18px; padding: 16px; border: 1px solid #a9d2bd; border-radius: 9px; background: #f5fcf7; }
 .output-ready-heading { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; color: #38644b; }
 .output-ready-heading strong { font-size: 18px; color: #17633b; }

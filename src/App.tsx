@@ -41,6 +41,7 @@ function formatSeconds(seconds: number) {
 type CorrectionDecision = 'keep' | 'accept' | 'custom'
 type ModelOutputBase = { notice: string; minutes: string; actions: string; agenda: string; source: string }
 type ModelTestStatus = 'idle' | 'testing' | 'available' | 'empty' | 'error'
+type GenerationStatus = { kind: 'working' | 'success' | 'error'; message: string }
 
 function applyCorrectionChoices(result: GenerationResult, decisions: Record<number, CorrectionDecision>, customValues: Record<number, string>) {
   return result.changes.reduce((text, change, index) => {
@@ -69,6 +70,7 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [output, setOutput] = useState<MeetingOutput | null>(null)
   const [showOutputPreview, setShowOutputPreview] = useState(false)
+  const [generationStatus, setGenerationStatus] = useState<GenerationStatus | null>(null)
   const [modelOutputBase, setModelOutputBase] = useState<ModelOutputBase | null>(null)
   const [correctionResult, setCorrectionResult] = useState<GenerationResult | null>(null)
   const [correctionDecisions, setCorrectionDecisions] = useState<Record<number, CorrectionDecision>>({})
@@ -262,9 +264,21 @@ export default function App() {
   const updateSegment = (id: string, text: string) => setSegments((current) => current.map((segment) => segment.id === id ? { ...segment, text } : segment))
 
   const generate = async () => {
-    if (!segments.length) return setStatus('請先完成轉錄。')
+    if (!segments.length) {
+      const message = '請先完成轉錄或載入逐字稿。'
+      setGenerationStatus({ kind: 'error', message })
+      setStatus(message)
+      return
+    }
+    if (!config.apiKey.trim() || !config.modelId) {
+      const message = '請先在第四步測試 API Key 並選擇模型。'
+      setGenerationStatus({ kind: 'error', message })
+      setStatus(message)
+      return
+    }
     setBusy(true)
     setShowOutputPreview(false)
+    setGenerationStatus({ kind: 'working', message: `正在使用 ${config.modelId} 整理會議紀錄，請稍候…` })
     try {
       const prompt = createPrompt(segments, references, glossary, language)
       const result = await generateText(config, prompt)
@@ -279,9 +293,17 @@ export default function App() {
       setCorrectionDecisions(Object.fromEntries(result.changes.map((_, index) => [index, 'accept' as const])))
       setCustomCorrections({})
       setOutput({ notice, minutes, actions, agenda, a4Html: renderA4Html(notice, minutes, actions, agenda, source) })
-      setStatus('整理完成，請檢閱文字校正，或預覽／下載會議成果。')
+      const message = '整理完成，可直接預覽或下載會議成果。'
+      setGenerationStatus({ kind: 'success', message })
+      setStatus(message)
     } catch (error) {
-      setStatus(`生成失敗：${error instanceof Error ? error.message : String(error)}`)
+      const detail = error instanceof Error ? error.message : String(error)
+      const readableDetail = /failed to fetch|load failed|networkerror/i.test(detail)
+        ? '瀏覽器無法連線到模型 API；請確認網路、API Base URL，以及服務是否允許此網站的 CORS 請求。'
+        : detail
+      const message = `整理失敗：${readableDetail}`
+      setGenerationStatus({ kind: 'error', message })
+      setStatus(message)
     } finally { setBusy(false) }
   }
 
@@ -325,7 +347,17 @@ export default function App() {
         <p className="hint">{PROVIDERS.find((provider) => provider.id === config.id)?.hint}</p><button className="secondary" onClick={testProvider} disabled={busy || !config.apiKey}>{busy ? '測試中…' : '測試 Key 並讀取模型'}</button>{modelTestStatus === 'available' && <p className="model-available" role="status">模型可用（已讀取 {models.length} 個）</p>}{modelTestStatus === 'empty' && <p className="model-unavailable" role="status">測試成功，但沒有可列舉的模型。</p>}{models.length > 0 && <label className="field model-select"><span>選擇模型</span><select value={config.modelId ?? ''} onChange={(e) => setConfig({ ...config, modelId: e.target.value })}>{models.map((model) => <option key={model.id} value={model.id}>{model.displayName}（{model.id}）</option>)}</select></label>}
       </section>
 
-      <section className="panel output-panel"><div className="section-heading"><span className="step">5</span><div><h2>產生會議成果</h2><p>使用第四步選定的模型整理；完成後可預覽或下載。</p></div></div><div className="controls-row"><button className="primary" onClick={generate} disabled={busy || !segments.length || !config.modelId}>{busy ? '整理中…' : '整理會議紀錄'}</button></div>{correctionResult && <div className="correction-review"><h3>文字校正確認</h3><p className="hint">紅色文字是模型建議的編修詞。預設為「同意編修」；請逐項選擇後再套用到匯出草稿。</p>{correctionResult.changes.length ? <div className="correction-list">{correctionResult.changes.map((change, index) => <div className="correction-item" key={`${change.from}-${change.to}-${index}`}><div className="correction-text"><span>原文：{change.from}</span><span>建議：<mark className="correction-red">{change.to}</mark></span><small>{change.reason}（信心：{change.confidence}）</small></div><select value={correctionDecisions[index] ?? 'accept'} onChange={(event) => setCorrectionDecisions((current) => ({ ...current, [index]: event.target.value as CorrectionDecision }))}><option value="keep">維持原文</option><option value="accept">同意編修</option><option value="custom">自己輸入</option></select>{correctionDecisions[index] === 'custom' && <input className="custom-correction" value={customCorrections[index] ?? ''} placeholder="輸入要使用的文字" onChange={(event) => setCustomCorrections((current) => ({ ...current, [index]: event.target.value }))} />}</div>)}</div> : <p className="empty">模型沒有回傳可辨識的編修詞。</p>}<div className="approved-preview"><strong>核准後文字預覽</strong><p>{approvedCorrectionText || correctionResult.revisedText}</p></div><button className="secondary" onClick={applyCorrectionsToOutput} disabled={!output || !correctionResult}>套用文字校正到匯出草稿</button></div>}{output && <div className="output-ready" role="status"><div className="output-ready-heading"><strong>整理完成</strong><span>可先預覽內容，再下載需要的文件。</span></div><div className="output-actions"><button onClick={() => download('01_會後通知信.md', output.notice)}>下載通知信</button><button onClick={() => download('02_完整會議紀錄.md', output.minutes)}>下載完整紀錄</button><button onClick={() => download('03_本次待辦事項.md', output.actions)}>下載待辦</button><button onClick={() => download('04_下次會議議程.md', output.agenda)}>下載議程</button><button onClick={() => download('05_會議成果彙整_A4列印.html', output.a4Html, 'text/html;charset=utf-8')}>下載 A4 HTML</button><button className="preview-button" onClick={() => setShowOutputPreview((current) => !current)}>{showOutputPreview ? '收起預覽' : '預覽整理結果'}</button></div>{showOutputPreview && <div className="preview output-preview"><section><h3>會後通知信</h3><pre>{output.notice}</pre></section><section><h3>完整會議紀錄</h3><pre>{output.minutes}</pre></section><section><h3>本次待辦事項</h3><pre>{output.actions}</pre></section><section><h3>下次會議議程</h3><pre>{output.agenda}</pre></section></div>}</div>}</section>
+      <section className="panel output-panel">
+        <div className="section-heading"><span className="step">5</span><div><h2>產生會議成果</h2><p>使用第四步選定的模型整理；完成後可預覽或下載。</p></div></div>
+        <div className="controls-row"><button className="primary" onClick={generate} disabled={busy}>{generationStatus?.kind === 'working' ? '整理中…' : '整理會議紀錄'}</button></div>
+        {generationStatus && <p className={`generation-status is-${generationStatus.kind}`} role={generationStatus.kind === 'error' ? 'alert' : 'status'}>{generationStatus.message}</p>}
+        {output && <div className="output-ready" role="status">
+          <div className="output-ready-heading"><strong>整理完成</strong><span>可先預覽內容，再下載需要的文件。</span></div>
+          <div className="output-actions"><button onClick={() => download('01_會後通知信.md', output.notice)}>下載通知信</button><button onClick={() => download('02_完整會議紀錄.md', output.minutes)}>下載完整紀錄</button><button onClick={() => download('03_本次待辦事項.md', output.actions)}>下載待辦</button><button onClick={() => download('04_下次會議議程.md', output.agenda)}>下載議程</button><button onClick={() => download('05_會議成果彙整_A4列印.html', output.a4Html, 'text/html;charset=utf-8')}>下載 A4 HTML</button><button className="preview-button" onClick={() => setShowOutputPreview((current) => !current)}>{showOutputPreview ? '收起預覽' : '預覽整理結果'}</button></div>
+          {showOutputPreview && <div className="preview output-preview"><section><h3>會後通知信</h3><pre>{output.notice}</pre></section><section><h3>完整會議紀錄</h3><pre>{output.minutes}</pre></section><section><h3>本次待辦事項</h3><pre>{output.actions}</pre></section><section><h3>下次會議議程</h3><pre>{output.agenda}</pre></section></div>}
+        </div>}
+        {correctionResult && <div className="correction-review"><h3>文字校正確認</h3><p className="hint">紅色文字是模型建議的編修詞。預設為「同意編修」；請逐項選擇後再套用到匯出草稿。</p>{correctionResult.changes.length ? <div className="correction-list">{correctionResult.changes.map((change, index) => <div className="correction-item" key={`${change.from}-${change.to}-${index}`}><div className="correction-text"><span>原文：{change.from}</span><span>建議：<mark className="correction-red">{change.to}</mark></span><small>{change.reason}（信心：{change.confidence}）</small></div><select value={correctionDecisions[index] ?? 'accept'} onChange={(event) => setCorrectionDecisions((current) => ({ ...current, [index]: event.target.value as CorrectionDecision }))}><option value="keep">維持原文</option><option value="accept">同意編修</option><option value="custom">自己輸入</option></select>{correctionDecisions[index] === 'custom' && <input className="custom-correction" value={customCorrections[index] ?? ''} placeholder="輸入要使用的文字" onChange={(event) => setCustomCorrections((current) => ({ ...current, [index]: event.target.value }))} />}</div>)}</div> : <p className="empty">模型沒有回傳可辨識的編修詞。</p>}<div className="approved-preview"><strong>核准後文字預覽</strong><p>{approvedCorrectionText || correctionResult.revisedText}</p></div><button className="secondary" onClick={applyCorrectionsToOutput} disabled={!output || !correctionResult}>套用文字校正到匯出草稿</button></div>}
+      </section>
     </main>
   </div>
 }
