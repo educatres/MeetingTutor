@@ -4,7 +4,7 @@ import './styles.css'
 import type { GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, ReferenceDocument, TranscriptSegment } from './types'
 import { PROVIDERS, generateText, listModels, providerLabel } from './lib/providers'
 import { readReference } from './lib/references'
-import { cleanPlainTextOutput, createPrompt, renderTableHtml } from './lib/outputs'
+import { cleanPlainTextOutput, createPrompt, extractPlainTextSection } from './lib/outputs'
 import { transcribe } from './lib/transcription'
 import { parseTeamsTranscript } from './lib/transcript'
 
@@ -346,18 +346,8 @@ export default function App() {
       const prompt = createPrompt(segments, references, glossary, language, recordTemplate)
       const generatedText = await generateText(config, prompt, systemPrompt)
       const minutes = cleanPlainTextOutput(generatedText || transcriptText)
-      const actions = includeActions ? renderTableHtml(
-        '待辦追蹤表',
-        ['請由會議紀錄者核對內容後再正式發佈。'],
-        ['任務編號', '待辦事項', '主責人', '協作人', '完成標準', '期限', '狀態', '關聯決策', '來源會議', '備註／阻礙'],
-        [['ACT-DATE-UNKNOWN-01', '人工核對模型修訂與待確認事項', '待指定', '無', '完成核准的會議紀錄', '待確認', '待驗收', 'DEC-DATE-UNKNOWN-01', '會議名稱待確認', '來源：模型輸出與逐字稿']],
-      ) : undefined
-      const agenda = includeAgenda ? renderTableHtml(
-        '下次會議議程（草稿）',
-        ['預定日期：待安排', '會議目標：確認模型提出的修訂、專有名詞與未決事項。'],
-        ['優先序', '議題', '事前準備／負責人', '預期產出', '關聯編號'],
-        [['1', '檢閱未決與術語', '會議紀錄者；提供原始資料', '核准或修正決議', 'DEC-DATE-UNKNOWN-01／ACT-DATE-UNKNOWN-01']],
-      ) : undefined
+      const actions = includeActions ? extractPlainTextSection(minutes, ['待辦事項', '待辦', '行動項目']) || undefined : undefined
+      const agenda = includeAgenda ? extractPlainTextSection(minutes, ['下次會議議程', '下次議程', '後續安排']) || undefined : undefined
       setOutput({ minutes, actions, agenda })
       setGeneratedTemplate(recordTemplate)
       const message = '整理完成，成果已直接顯示在下方。'
@@ -391,6 +381,7 @@ export default function App() {
     <main className="workspace">
       <section className="panel"><div className="section-heading"><span className="step">1</span><div><h2>取得音訊或上傳逐字稿</h2><p>轉寫語言預設為中文，也可選擇英文。</p></div></div>
         <div className="controls-row"><label className="field"><span>轉寫語言</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} disabled={busy}><option value="zh">中文（繁體／多語模型）</option><option value="en">English（英文模型）</option></select></label><label className="field"><span>Whisper 模型</span><select value={whisperModel} onChange={(event) => setWhisperModel(event.target.value as 'tiny' | 'base' | 'medium')} disabled={busy}><option value="medium">Whisper-medium（最準確、需要較多記憶體）</option><option value="base">Whisper-base（預設，較準確）</option><option value="tiny">Whisper-tiny（較快、較省資源）</option></select></label><label className="file-picker"><span>選擇音訊</span><input type="file" accept="audio/*,video/*" onChange={onAudioChange} disabled={busy} /></label><button className="secondary" onClick={recording ? stopRecording : startRecording} disabled={busy}>{recording ? '停止錄音' : '開始錄音'}</button></div>
+        {whisperModel === 'medium' && <p className="model-warning" role="alert">提醒：Whisper-medium 模型很大，需要電腦硬體足夠好才能跑完，處理過程可能中斷。</p>}
         <div className="controls-row transcript-upload-row"><label className="file-picker wide"><span>或上傳 Teams 逐字稿（.vtt／.txt／.srt）</span><input type="file" accept=".vtt,.txt,.srt,text/vtt,text/plain" onChange={onTranscriptChange} disabled={busy} /></label></div>
         {audioFile && <p className="file-note">已準備：{audioFile.name}（{Math.round(audioFile.size / 1024)} KB）</p>}
         {transcriptFile && <p className="file-note">已準備 Teams 逐字稿：{transcriptFile.name}（{uploadedTranscriptSegments.length} 段）</p>}
@@ -414,12 +405,12 @@ export default function App() {
           <div className="system-prompt-examples"><span>快速範例（可複選，點擊後追加）</span><div>{SYSTEM_PROMPT_EXAMPLES.map((example) => <button type="button" key={example.label} onClick={() => addSystemPromptExample(example)} disabled={busy || systemPrompt.includes(example.prompt)} title={example.prompt}>{example.label}</button>)}</div></div>
           <div className="system-prompt-meta"><span>自動保存在此瀏覽器，重新整理後仍會保留。{systemPrompt.length.toLocaleString()} / 6,000 字</span><button type="button" className="secondary" onClick={() => setSystemPrompt('')} disabled={busy || !systemPrompt}>清除指示</button></div>
         </div>
-        {recordTemplate === 'meeting' && <div className="output-options"><strong>選擇額外輸出</strong><span>完整會議記錄摘要固定產生，其他文件可依需要勾選。</span><label><input type="checkbox" checked={includeActions} onChange={(event) => setIncludeActions(event.target.checked)} disabled={busy} />輸出待辦事項</label><label><input type="checkbox" checked={includeAgenda} onChange={(event) => setIncludeAgenda(event.target.checked)} disabled={busy} />輸出下次議程</label></div>}
+        {recordTemplate === 'meeting' && <div className="output-options"><strong>選擇額外輸出</strong><span>待辦事項與下次議程會由 AI 根據會議記錄內容整理成純文字；找不到內容時不顯示。</span><label><input type="checkbox" checked={includeActions} onChange={(event) => setIncludeActions(event.target.checked)} disabled={busy} />輸出待辦事項</label><label><input type="checkbox" checked={includeAgenda} onChange={(event) => setIncludeAgenda(event.target.checked)} disabled={busy} />輸出下次議程</label></div>}
         <div className="controls-row"><button className="primary" onClick={generate} disabled={busy}>{generationStatus?.kind === 'working' ? '整理中…' : recordTemplate === 'class' ? '整理課堂筆記' : '整理會議記錄'}</button></div>
         {generationStatus && <p className={`generation-status is-${generationStatus.kind}`} role={generationStatus.kind === 'error' ? 'alert' : 'status'}>{generationStatus.message}</p>}
         {output && <div className="output-ready" role="status" ref={outputResultRef}>
           <div className="output-ready-heading"><strong>整理完成</strong><span>結果已直接顯示於下方。</span></div>
-          <div className="output-results"><section className="output-result"><h3>{generatedTemplate === 'class' ? '完整課堂筆記' : '完整會議記錄摘要'}</h3><pre>{output.minutes}</pre></section>{output.actions && <section className="output-result"><h3>本次待辦事項</h3><iframe className="html-preview-frame" title="本次待辦事項" srcDoc={output.actions} sandbox="allow-modals allow-scripts" /></section>}{output.agenda && <section className="output-result"><h3>下次會議議程</h3><iframe className="html-preview-frame" title="下次會議議程" srcDoc={output.agenda} sandbox="allow-modals allow-scripts" /></section>}</div>
+          <div className="output-results"><section className="output-result"><h3>{generatedTemplate === 'class' ? '完整課堂筆記' : '完整會議記錄摘要'}</h3><pre>{output.minutes}</pre></section>{output.actions && <section className="output-result"><h3>本次待辦事項</h3><pre>{output.actions}</pre></section>}{output.agenda && <section className="output-result"><h3>下次會議議程</h3><pre>{output.agenda}</pre></section>}</div>
         </div>}
       </section>
     </main>
