@@ -71,7 +71,7 @@ button { cursor: pointer; }
 .live-transcript-heading { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; color: #285268; font-size: 13px; }
 .live-transcript-heading strong { color: #1e6381; }
 .live-transcript-heading span { color: #637782; }
-.live-transcript-box { height: 360px; max-height: 360px; overflow-y: auto; border-top: 1px solid #dce8ed; }
+.live-transcript-box { height: 220px; max-height: 220px; overflow-y: auto; border-top: 1px solid #dce8ed; }
 .live-segment { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border-bottom: 1px solid #e1ebef; color: #253640; line-height: 1.5; }
 .live-segment:last-child { border-bottom: 0; }
 .live-segment .timestamp { flex: none; min-width: 46px; padding-top: 7px; }

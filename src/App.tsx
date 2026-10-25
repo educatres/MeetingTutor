@@ -97,7 +97,7 @@ export default function App() {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [modelTestStatus, setModelTestStatus] = useState<ModelTestStatus>('idle')
   const [systemPrompt, setSystemPrompt] = useState(storedSystemPrompt)
-  const [status, setStatus] = useState('請選擇音訊檔或開始錄音。')
+  const [status, setStatus] = useState('狀態/進度')
   const [busy, setBusy] = useState(false)
   const [output, setOutput] = useState<MeetingOutput | null>(null)
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus | null>(null)
@@ -194,7 +194,7 @@ export default function App() {
       setTranscriptFile(null)
       setUploadedTranscriptSegments([])
     }
-    setStatus(file ? `已選擇：${file.name}` : '請選擇音訊檔或開始錄音。')
+    setStatus(file ? `已選擇：${file.name}` : '狀態/進度')
   }
 
   const onTranscriptChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -422,13 +422,13 @@ export default function App() {
       </section>
 
       <section className="panel">
-        <div className="section-heading"><span className="step">3</span><div><h2>逐字稿修正補充資料 (修正專有名詞、人名的錯誤，可跳過)</h2><p>加入已確認詞彙或參考檔案，協助模型修正專有名詞與姓名。</p></div></div>
+        <div className="section-heading"><span className="step">2</span><div><h2>逐字稿修正補充資料 (修正專有名詞、人名的錯誤，可跳過)</h2><p>加入已確認詞彙或參考檔案，協助模型修正專有名詞與姓名。</p></div></div>
         <div className="supplement-block"><h3>確認詞彙</h3><div className="glossary-form"><textarea className="glossary-input" rows={2} placeholder="輸入姓名或專有名詞，以逗號或換行分隔，例如：王小明、MeetingTutor、CGU" value={newTermText} onChange={(e) => setNewTermText(e.target.value)} /><button className="secondary" onClick={addTerm}>加入詞彙</button></div>{glossary.length > 0 && <div className="chips">{glossary.map((term) => <button key={`${term.canonical}-${term.kind}`} className="chip" onClick={() => setGlossary((current) => current.filter((item) => item !== term))}>{term.kind}：{term.canonical} ×</button>)}</div>}</div>
         <div className="supplement-block"><h3>參考檔案</h3><label className="file-picker wide"><span>加入 PDF、TXT 或 Markdown</span><input type="file" accept="application/pdf,text/plain,text/markdown,.md,.txt" multiple onChange={addReferences} disabled={busy} /></label>{references.length > 0 && <ul className="reference-list">{references.map((reference) => <li key={reference.id}><span>{reference.name}</span><small>{reference.type === 'pdf' ? `${reference.pages} 頁` : `${reference.text.length.toLocaleString()} 字`}</small><button onClick={() => setReferences((current) => current.filter((item) => item.id !== reference.id))}>移除</button></li>)}</ul>}<p className="hint">掃描型 PDF 沒有文字層時，系統會提示需要 OCR，不會假裝讀取成功。</p></div>
       </section>
 
       <section className="panel output-panel">
-        <div className="section-heading"><span className="step">4</span><div><h2>產生記錄成果</h2><p>選擇適合的記錄模板與整理方向，再使用頁首保存的 AI 模型產生可直接使用的純文字記錄。</p></div></div>
+        <div className="section-heading"><span className="step">3</span><div><h2>產生記錄成果</h2><p>選擇適合的記錄模板與整理方向，再使用頁首保存的 AI 模型產生可直接使用的純文字記錄。</p></div></div>
         <div className="record-template"><strong>記錄模板</strong><label><input type="radio" name="record-template" value="meeting" checked={recordTemplate === 'meeting'} onChange={() => changeRecordTemplate('meeting')} disabled={busy} />會議記錄摘要</label><label><input type="radio" name="record-template" value="class" checked={recordTemplate === 'class'} onChange={() => changeRecordTemplate('class')} disabled={busy} />上課錄音／課堂筆記</label></div>
         <div className="system-prompt-panel">
           <label className="field"><span>AI 修正方向（System Prompt）</span><textarea value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} rows={5} maxLength={6000} disabled={busy} placeholder="例如：保留講者原意，將口語改為正式繁體中文；專有名詞不要自行猜測；摘要優先列出決議、負責人與期限。" /></label>
