@@ -11,6 +11,7 @@ import { parseTeamsTranscript } from './lib/transcript'
 const defaultProvider: ProviderId = 'openai'
 const initialConfig: ProviderConfig = { id: defaultProvider, apiKey: '', baseUrl: PROVIDERS[0].defaultBaseUrl }
 const API_KEYS_STORAGE_KEY = 'meetingtutor.api-keys.v1'
+const SYSTEM_PROMPT_STORAGE_KEY = 'meetingtutor.ai-system-prompt.v1'
 
 function storedApiKeys(): Partial<Record<ProviderId, string>> {
   try {
@@ -21,6 +22,10 @@ function storedApiKeys(): Partial<Record<ProviderId, string>> {
 
 function storedApiKey(provider: ProviderId) {
   return storedApiKeys()[provider] ?? ''
+}
+
+function storedSystemPrompt() {
+  try { return window.localStorage.getItem(SYSTEM_PROMPT_STORAGE_KEY) ?? '' } catch { return '' }
 }
 
 function download(name: string, content: string, type = 'text/plain;charset=utf-8') {
@@ -67,6 +72,7 @@ export default function App() {
   const [config, setConfig] = useState<ProviderConfig>(() => ({ ...initialConfig, apiKey: storedApiKey(defaultProvider) }))
   const [models, setModels] = useState<ModelInfo[]>([])
   const [modelTestStatus, setModelTestStatus] = useState<ModelTestStatus>('idle')
+  const [systemPrompt, setSystemPrompt] = useState(storedSystemPrompt)
   const [status, setStatus] = useState('請選擇音訊檔或開始錄音。')
   const [busy, setBusy] = useState(false)
   const [output, setOutput] = useState<MeetingOutput | null>(null)
@@ -87,6 +93,13 @@ export default function App() {
       window.localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(keys))
     } catch { /* Private browsing or blocked storage: keep the key in memory only. */ }
   }, [config.id, config.apiKey])
+
+  useEffect(() => {
+    try {
+      if (systemPrompt) window.localStorage.setItem(SYSTEM_PROMPT_STORAGE_KEY, systemPrompt)
+      else window.localStorage.removeItem(SYSTEM_PROMPT_STORAGE_KEY)
+    } catch { /* Private browsing or blocked storage: keep the prompt in memory only. */ }
+  }, [systemPrompt])
 
   useEffect(() => {
     const box = liveTranscriptRef.current
@@ -288,7 +301,7 @@ export default function App() {
     setGenerationStatus({ kind: 'working', message: `正在使用 ${config.modelId} 整理會議紀錄，請稍候…` })
     try {
       const prompt = createPrompt(segments, references, glossary, language)
-      const result = await generateText(config, prompt)
+      const result = await generateText(config, prompt, systemPrompt)
       const revised = result.revisedText || transcriptText
       const notice = `主旨：【會後通知】會議名稱待確認｜日期待確認\n\n各位好：\n\n以下為模型整理草稿，請逐項核對原始逐字稿。\n\n一、語句修飾後內容\n${revised}\n\n二、專有名詞／姓名\n${result.terms.map((term) => `- ${term.source} → ${term.suggested}（${term.status}）`).join('\n') || '- 未偵測到可確認詞彙'}\n\n三、待確認事項\n${result.uncertainties.map((item) => `- ${item}`).join('\n') || '- 無'}\n\n本信為草稿，未寄出。`
       const minutes = `# 會議名稱待確認｜會議紀錄\n\n- 會議日期／時間：待確認\n- 地點：未提供\n- 資料來源：瀏覽器端逐字稿與使用者參考資料\n\n## 一、會議摘要\n${revised}\n\n## 二、修訂與來源\n${result.changes.map((change) => `- ${change.from} → ${change.to}：${change.reason}（${change.confidence}）`).join('\n') || '- 模型未提供差異'}\n\n## 三、決策與理由\n- DEC-DATE-UNKNOWN-01：狀態：未決；請人工確認，不得將模型推測視為正式決議。\n\n## 四、待確認事項\n${result.uncertainties.map((item) => `- ${item}`).join('\n') || '- 無'}\n\n## 五、原始逐字稿\n${transcriptText}`
@@ -352,6 +365,10 @@ export default function App() {
       <section className="panel"><div className="section-heading"><span className="step">4</span><div><h2>連接你的模型</h2><p>Key 只在目前工作階段使用；測試成功後才會顯示模型。</p></div></div>
         <div className="provider-grid"><label className="field"><span>Provider</span><select value={config.id} onChange={(e) => updateProvider(e.target.value as ProviderId)} disabled={busy}>{PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label><label className="field"><span>API Key（保存在本機瀏覽器）</span><div className="key-input"><input type={showKey ? 'text' : 'password'} value={config.apiKey} onChange={(e) => updateApiKey(e.target.value)} autoComplete="off" placeholder="貼上你的 Key" disabled={busy} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? '隱藏' : '顯示'}</button><button type="button" onClick={clearApiKeys} disabled={busy}>清除 API Key</button></div></label><label className="field"><span>API Base URL</span><input value={config.baseUrl ?? ''} onChange={(e) => updateBaseUrl(e.target.value)} disabled={busy} /></label>{config.id === 'cgu' && <label className="field"><span>CGU 推理程度（預設：中）</span><select value={config.reasoningEffort ?? 'medium'} onChange={(e) => setConfig((current) => ({ ...current, reasoningEffort: e.target.value as ReasoningEffort }))} disabled={busy}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>}</div>
         <p className="hint">{PROVIDERS.find((provider) => provider.id === config.id)?.hint}</p><button className="secondary" onClick={testProvider} disabled={busy || !config.apiKey}>{busy ? '測試中…' : '測試 Key 並讀取模型'}</button>{modelTestStatus === 'available' && <p className="model-available" role="status">模型可用（已讀取 {models.length} 個）</p>}{modelTestStatus === 'empty' && <p className="model-unavailable" role="status">測試成功，但沒有可列舉的模型。</p>}{models.length > 0 && <label className="field model-select"><span>選擇模型</span><select value={config.modelId ?? ''} onChange={(e) => setConfig({ ...config, modelId: e.target.value })}>{models.map((model) => <option key={model.id} value={model.id}>{model.displayName}（{model.id}）</option>)}</select></label>}
+        <div className="system-prompt-panel">
+          <label className="field"><span>AI 修正方向（System Prompt）</span><textarea value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} rows={5} maxLength={6000} disabled={busy} placeholder="例如：保留講者原意，將口語改為正式繁體中文；專有名詞不要自行猜測；摘要優先列出決議、負責人與期限。" /></label>
+          <div className="system-prompt-meta"><span>自動保存在此瀏覽器，重新整理後仍會保留。{systemPrompt.length.toLocaleString()} / 6,000 字</span><button type="button" className="secondary" onClick={() => setSystemPrompt('')} disabled={busy || !systemPrompt}>清除指示</button></div>
+        </div>
       </section>
 
       <section className="panel output-panel">

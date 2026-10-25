@@ -150,13 +150,16 @@ function responsesText(body: any): string {
     .join('')
 }
 
-export async function generateText(config: ProviderConfig, prompt: string): Promise<GenerationResult> {
+export async function generateText(config: ProviderConfig, prompt: string, systemPrompt = ''): Promise<GenerationResult> {
   if (!config.apiKey.trim() || !config.modelId) throw new Error('請先測試 API Key 並選擇模型。')
   const model = config.modelId
+  const instructions = systemPrompt.trim()
   if (config.id === 'google') {
     const base = cleanBaseUrl(config.baseUrl || 'https://generativelanguage.googleapis.com/v1beta')
+    const requestBody: Record<string, unknown> = { contents: [{ role: 'user', parts: [{ text: prompt }] }] }
+    if (instructions) requestBody.systemInstruction = { parts: [{ text: instructions }] }
     const body = await responseJson(await request(`${base}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(config.apiKey)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody),
     }, 120_000))
     const text = body.candidates?.[0]?.content?.parts?.map((part: any) => part.text || '').join('') || ''
     return parseJsonResult(text)
@@ -166,16 +169,21 @@ export async function generateText(config: ProviderConfig, prompt: string): Prom
   }
   const base = cleanBaseUrl(config.baseUrl || PROVIDERS.find((p) => p.id === config.id)?.defaultBaseUrl || '')
   if (config.id === 'cgu' && /luna/i.test(model)) {
+    const requestBody: Record<string, unknown> = { model, input: prompt, max_output_tokens: 4096, reasoning: { effort: config.reasoningEffort ?? 'medium' } }
+    if (instructions) requestBody.instructions = instructions
     const body = await responseJson(await request(`${base}/responses`, {
       method: 'POST',
       headers: authHeaders(config.apiKey),
-      body: JSON.stringify({ model, input: prompt, max_output_tokens: 4096, reasoning: { effort: config.reasoningEffort ?? 'medium' } }),
+      body: JSON.stringify(requestBody),
     }, 120_000))
     const text = responsesText(body)
     if (!text) throw new Error('模型已回應，但沒有可讀取的文字內容。')
     return parseJsonResult(text)
   }
-  const requestBody: Record<string, unknown> = { model, messages: [{ role: 'user', content: prompt }] }
+  const messages = instructions
+    ? [{ role: 'system', content: instructions }, { role: 'user', content: prompt }]
+    : [{ role: 'user', content: prompt }]
+  const requestBody: Record<string, unknown> = { model, messages }
   if (config.id === 'cgu') {
     requestBody.max_completion_tokens = 4096
   } else {
