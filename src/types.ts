@@ -1,9 +1,5 @@
 export type Language = 'zh' | 'en'
 
-export type LocalWhisperModel = 'tiny' | 'base' | 'medium'
-export type CguAudioModel = 'whisper-1' | 'tts-1' | 'tts-1-hd' | 'gpt-transcribe'
-export type WhisperModel = LocalWhisperModel | CguAudioModel
-
 export type ProviderId = 'openai' | 'xai' | 'google' | 'cgu'
 export type ReasoningEffort = 'low' | 'medium' | 'high'
 

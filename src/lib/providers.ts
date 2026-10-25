@@ -1,4 +1,4 @@
-import type { CguAudioModel, Language, ModelInfo, ProviderConfig, ProviderId, TranscriptSegment } from '../types'
+import type { ModelInfo, ProviderConfig, ProviderId } from '../types'
 
 export const PROVIDERS: Array<{ id: ProviderId; label: string; defaultBaseUrl: string; hint: string }> = [
   { id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', hint: '支援 OpenAI 相容的 models 與 chat/completions。' },
@@ -179,54 +179,4 @@ export async function generateText(config: ProviderConfig, prompt: string, syste
   const text = body.choices?.[0]?.message?.content || ''
   if (!text) throw new Error('模型已回應，但沒有可讀取的文字內容。')
   return text
-}
-
-type AudioProgress = { status?: string; progress?: number; phase?: 'model' | 'transcribing'; indeterminate?: boolean }
-
-function audioTranscriptionSegments(body: any): TranscriptSegment[] {
-  const segments = Array.isArray(body?.segments) ? body.segments.map((segment: any, index: number) => {
-    const text = String(segment?.text ?? '').trim()
-    return {
-      id: crypto.randomUUID?.() ?? `cgu-segment-${index}`,
-      start: Number(segment?.start ?? 0),
-      end: Number(segment?.end ?? segment?.start ?? 0),
-      text,
-      originalText: text,
-    }
-  }).filter((segment: TranscriptSegment) => segment.text) : []
-  if (segments.length) return segments
-  const text = String(body?.text ?? body?.raw ?? '').trim()
-  return text ? [{ id: crypto.randomUUID(), start: 0, end: 0, text, originalText: text }] : []
-}
-
-export async function transcribeWithCgu(
-  config: ProviderConfig,
-  file: Blob,
-  language: Language,
-  model: CguAudioModel,
-  onProgress: (progress: AudioProgress) => void,
-  onSegments?: (segments: TranscriptSegment[]) => void,
-): Promise<TranscriptSegment[]> {
-  if (config.id !== 'cgu') throw new Error('CGU 音訊模型只能在 Provider 設為 CGU 時使用。')
-  if (!config.apiKey.trim()) throw new Error('請先輸入 CGU API Key。')
-  const base = cleanBaseUrl(config.baseUrl || PROVIDERS.find((provider) => provider.id === 'cgu')!.defaultBaseUrl)
-  const form = new FormData()
-  form.append('file', file, file instanceof File ? file.name : 'meeting-audio.webm')
-  form.append('model', model)
-  form.append('language', language === 'zh' ? 'zh' : 'en')
-  if (model === 'whisper-1') {
-    form.append('response_format', 'verbose_json')
-    form.append('timestamp_granularities[]', 'segment')
-  }
-  onProgress({ status: `正在使用 CGU API ${model} 轉錄…`, phase: 'transcribing', indeterminate: true })
-  const body = await responseJson(await request(`${base}/audio/transcriptions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${config.apiKey}` },
-    body: form,
-  }, 180_000))
-  const segments = audioTranscriptionSegments(body)
-  if (!segments.length) throw new Error('CGU API 沒有回傳可用的逐字稿。')
-  onProgress({ status: `CGU API ${model} 轉錄完成。`, progress: 100, phase: 'transcribing' })
-  onSegments?.(segments)
-  return segments
 }
