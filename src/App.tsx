@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import './styles.css'
-import type { GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReferenceDocument, TranscriptSegment } from './types'
+import type { GenerationResult, GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReferenceDocument, TranscriptSegment } from './types'
 import { PROVIDERS, generateText, listModels, providerLabel } from './lib/providers'
-import { readReference, relevantReferenceText } from './lib/references'
+import { readReference } from './lib/references'
 import { createPrompt, localOutputs, renderA4Html } from './lib/outputs'
 import { transcribe } from './lib/transcription'
 
@@ -25,6 +25,17 @@ function formatSeconds(seconds: number) {
   return `${minutes}:${rest}`
 }
 
+type CorrectionDecision = 'keep' | 'accept' | 'custom'
+type ModelOutputBase = { notice: string; minutes: string; actions: string; agenda: string; source: string }
+
+function applyCorrectionChoices(result: GenerationResult, decisions: Record<number, CorrectionDecision>, customValues: Record<number, string>) {
+  return result.changes.reduce((text, change, index) => {
+    const decision = decisions[index] ?? 'accept'
+    const replacement = decision === 'keep' ? change.from : decision === 'custom' ? (customValues[index] || change.to) : change.to
+    return change.to ? text.replace(change.to, replacement) : text
+  }, result.revisedText)
+}
+
 export default function App() {
   const [language, setLanguage] = useState<Language>('zh')
   const [whisperModel, setWhisperModel] = useState<'tiny' | 'base'>('base')
@@ -40,9 +51,35 @@ export default function App() {
   const [status, setStatus] = useState('請選擇音訊檔或開始錄音。')
   const [busy, setBusy] = useState(false)
   const [output, setOutput] = useState<MeetingOutput | null>(null)
+  const [modelOutputBase, setModelOutputBase] = useState<ModelOutputBase | null>(null)
+  const [correctionResult, setCorrectionResult] = useState<GenerationResult | null>(null)
+  const [correctionDecisions, setCorrectionDecisions] = useState<Record<number, CorrectionDecision>>({})
+  const [customCorrections, setCustomCorrections] = useState<Record<number, string>>({})
+  const [hardwareResult, setHardwareResult] = useState<string | null>(null)
   const [showKey, setShowKey] = useState(false)
 
   const transcriptText = useMemo(() => segments.map((segment) => segment.text).join(' '), [segments])
+  const approvedCorrectionText = useMemo(() => correctionResult ? applyCorrectionChoices(correctionResult, correctionDecisions, customCorrections) : '', [correctionResult, correctionDecisions, customCorrections])
+
+  const checkHardware = async () => {
+    const cores = navigator.hardwareConcurrency ?? 0
+    const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+    let availableStorageGb: number | null = null
+    if (navigator.storage?.estimate) {
+      const estimate = await navigator.storage.estimate()
+      if (estimate.quota !== undefined) availableStorageGb = Math.max(0, (estimate.quota - (estimate.usage ?? 0)) / 1024 ** 3)
+    }
+    const cpuOk = cores >= 4
+    const memoryOk = memory === undefined || memory >= 8
+    const storageOk = availableStorageGb === null || availableStorageGb >= 2
+    const missing = [
+      !cpuOk ? `CPU ${cores || '未知'} 核（建議至少 4 核）` : '',
+      memory !== undefined && !memoryOk ? `記憶體約 ${memory} GB（建議至少 8 GB）` : '',
+      availableStorageGb !== null && !storageOk ? `瀏覽器可用儲存配額約 ${availableStorageGb.toFixed(1)} GB（建議至少 2 GB）` : '',
+    ].filter(Boolean)
+    const webgpu = 'gpu' in navigator ? 'WebGPU 可用' : 'WebGPU 不可用，將使用 WASM'
+    setHardwareResult(missing.length ? `未完全符合最低建議：${missing.join('；')}。${webgpu}。仍可嘗試 Whisper-tiny。` : `符合最低建議（CPU ${cores || '未知'} 核${memory !== undefined ? `、記憶體約 ${memory} GB` : ''}）。${webgpu}。`)
+  }
 
   const updateProvider = (id: ProviderId) => {
     const provider = PROVIDERS.find((item) => item.id === id)!
@@ -142,17 +179,26 @@ export default function App() {
     setBusy(true)
     try {
       if (useModel) {
-        const prompt = createPrompt(segments, references, glossary)
+        const prompt = createPrompt(segments, references, glossary, language)
         const result = await generateText(config, prompt)
         const revised = result.revisedText || transcriptText
         const notice = `主旨：【會後通知】會議名稱待確認｜日期待確認\n\n各位好：\n\n以下為模型整理草稿，請逐項核對原始逐字稿。\n\n一、語句修飾後內容\n${revised}\n\n二、專有名詞／姓名\n${result.terms.map((term) => `- ${term.source} → ${term.suggested}（${term.status}）`).join('\n') || '- 未偵測到可確認詞彙'}\n\n三、待確認事項\n${result.uncertainties.map((item) => `- ${item}`).join('\n') || '- 無'}\n\n本信為草稿，未寄出。`
         const minutes = `# 會議名稱待確認｜會議紀錄\n\n- 會議日期／時間：待確認\n- 地點：未提供\n- 資料來源：瀏覽器端逐字稿與使用者參考資料\n\n## 一、會議摘要\n${revised}\n\n## 二、修訂與來源\n${result.changes.map((change) => `- ${change.from} → ${change.to}：${change.reason}（${change.confidence}）`).join('\n') || '- 模型未提供差異'}\n\n## 三、決策與理由\n- DEC-DATE-UNKNOWN-01：狀態：未決；請人工確認，不得將模型推測視為正式決議。\n\n## 四、待確認事項\n${result.uncertainties.map((item) => `- ${item}`).join('\n') || '- 無'}\n\n## 五、原始逐字稿\n${transcriptText}`
         const actions = `# 待辦追蹤表\n\n| 任務編號 | 待辦事項 | 主責人 | 協作人 | 完成標準 | 期限 | 狀態 | 關聯決策 | 來源會議 | 備註／阻礙 |\n|---|---|---|---|---|---|---|---|---|---|\n| ACT-DATE-UNKNOWN-01 | 人工核對模型修訂與待確認事項 | 待指定 | 無 | 完成核准的會議紀錄 | 待確認 | 待驗收 | DEC-DATE-UNKNOWN-01 | 會議名稱待確認 | 來源：模型輸出與逐字稿 |`
         const agenda = `# 下次會議議程（草稿）\n\n- 預定日期：待安排\n- 會議目標：確認模型提出的修訂、專有名詞與未決事項。\n\n| 優先序 | 議題 | 事前準備／負責人 | 預期產出 | 關聯編號 |\n|---|---|---|---|---|\n| 1 | 檢閱未決與術語 | 會議紀錄者；提供原始資料 | 核准或修正決議 | DEC-DATE-UNKNOWN-01／ACT-DATE-UNKNOWN-01 |`
-        setOutput({ notice, minutes, actions, agenda, a4Html: renderA4Html(notice, minutes, actions, agenda, references.map((reference) => reference.name).join('、') || '未提供') })
+        const source = references.map((reference) => reference.name).join('、') || '未提供'
+        setModelOutputBase({ notice, minutes, actions, agenda, source })
+        setCorrectionResult(result)
+        setCorrectionDecisions(Object.fromEntries(result.changes.map((_, index) => [index, 'accept' as const])))
+        setCustomCorrections({})
+        setOutput({ notice, minutes, actions, agenda, a4Html: renderA4Html(notice, minutes, actions, agenda, source) })
         setStatus('模型草稿已產生，請檢閱差異與待確認事項。')
       } else {
         setOutput(localOutputs(segments, references, glossary))
+        setModelOutputBase(null)
+        setCorrectionResult(null)
+        setCorrectionDecisions({})
+        setCustomCorrections({})
         setStatus('已產生本地結構草稿；尚未使用外部模型。')
       }
     } catch (error) {
@@ -160,9 +206,18 @@ export default function App() {
     } finally { setBusy(false) }
   }
 
+  const applyCorrectionsToOutput = () => {
+    if (!output || !modelOutputBase || !correctionResult) return
+    const replaceRevision = (text: string) => text.replace(correctionResult.revisedText, approvedCorrectionText)
+    const notice = replaceRevision(modelOutputBase.notice)
+    const minutes = replaceRevision(modelOutputBase.minutes)
+    setOutput({ ...output, notice, minutes, a4Html: renderA4Html(notice, minutes, modelOutputBase.actions, modelOutputBase.agenda, modelOutputBase.source) })
+    setStatus('已將文字校正選擇套用到匯出草稿。')
+  }
+
   return <div className="app-shell">
     <header className="hero">
-      <div><p className="eyebrow">MeetingTutor</p><h1>會議記錄轉錄器</h1><p className="hardware-note">最低硬體建議：四核心現代處理器、8 GB RAM、至少 2 GB 可用空間；使用最新版 Chrome／Edge／Firefox，WebGPU 可用時速度較佳。</p></div>
+      <div><p className="eyebrow">MeetingTutor</p><h1>會議記錄轉錄器</h1><div className="hardware-row"><p className="hardware-note">最低硬體建議：四核心現代處理器、8 GB RAM、至少 2 GB 可用空間；使用最新版 Chrome／Edge／Firefox，WebGPU 可用時速度較佳。</p><button className="hardware-button" onClick={checkHardware}>檢測我的硬體</button></div>{hardwareResult && <p className="hardware-result" role="status">{hardwareResult}</p>}</div>
       <div className="privacy-badge">🔒 音訊預設只在本機處理<br /><small>API Key 不會寫入專案</small></div>
     </header>
 
@@ -174,20 +229,20 @@ export default function App() {
         <p className="status" role="status">{status}</p>
       </section>
 
-      <section className="panel"><div className="section-heading"><span className="step">2</span><div><h2>逐字稿與詞彙</h2><p>原文保留；人名／專有名詞請先加入已確認詞彙。</p></div></div>
+      <section className="panel"><div className="section-heading"><span className="step">2</span><div><h2>逐字稿與詞彙（可跳過，但建議）</h2><p>原文保留；人名／專有名詞請先加入已確認詞彙。</p></div></div>
         <div className="glossary-form"><textarea className="glossary-input" rows={2} placeholder="輸入姓名或專有名詞，以逗號或換行分隔，例如：王小明、MeetingTutor、CGU" value={newTermText} onChange={(e) => setNewTermText(e.target.value)} /><button className="secondary" onClick={addTerm}>加入詞彙</button></div>
         {glossary.length > 0 && <div className="chips">{glossary.map((term) => <button key={`${term.canonical}-${term.kind}`} className="chip" onClick={() => setGlossary((current) => current.filter((item) => item !== term))}>{term.kind}：{term.canonical} ×</button>)}</div>}
         <div className="transcript-box">{segments.length ? segments.map((segment) => <div className="segment" key={segment.id}><span className="timestamp">{formatSeconds(segment.start)}</span><textarea value={segment.text} onChange={(e) => updateSegment(segment.id, e.target.value)} aria-label={`逐字稿 ${formatSeconds(segment.start)}`} /></div>) : <p className="empty">完成轉錄後，逐字稿會出現在這裡。</p>}</div>
       </section>
 
-      <section className="panel"><div className="section-heading"><span className="step">3</span><div><h2>參考資料</h2><p>加入 PDF、TXT 或 Markdown，協助校正專有名詞與姓名。</p></div></div><label className="file-picker wide"><span>加入參考檔案</span><input type="file" accept="application/pdf,text/plain,text/markdown,.md,.txt" multiple onChange={addReferences} disabled={busy} /></label>{references.length > 0 && <ul className="reference-list">{references.map((reference) => <li key={reference.id}><span>{reference.name}</span><small>{reference.type === 'pdf' ? `${reference.pages} 頁` : `${reference.text.length.toLocaleString()} 字`}</small><button onClick={() => setReferences((current) => current.filter((item) => item.id !== reference.id))}>移除</button></li>)}</ul>}<p className="hint">掃描型 PDF 沒有文字層時，系統會提示需要 OCR，不會假裝讀取成功。</p></section>
+      <section className="panel"><div className="section-heading"><span className="step">3</span><div><h2>參考資料（可跳過，但建議）</h2><p>加入 PDF、TXT 或 Markdown，協助校正專有名詞與姓名。</p></div></div><label className="file-picker wide"><span>加入參考檔案</span><input type="file" accept="application/pdf,text/plain,text/markdown,.md,.txt" multiple onChange={addReferences} disabled={busy} /></label>{references.length > 0 && <ul className="reference-list">{references.map((reference) => <li key={reference.id}><span>{reference.name}</span><small>{reference.type === 'pdf' ? `${reference.pages} 頁` : `${reference.text.length.toLocaleString()} 字`}</small><button onClick={() => setReferences((current) => current.filter((item) => item.id !== reference.id))}>移除</button></li>)}</ul>}<p className="hint">掃描型 PDF 沒有文字層時，系統會提示需要 OCR，不會假裝讀取成功。</p></section>
 
       <section className="panel"><div className="section-heading"><span className="step">4</span><div><h2>連接你的模型</h2><p>Key 只在目前工作階段使用；測試成功後才會顯示模型。</p></div></div>
         <div className="provider-grid"><label className="field"><span>Provider</span><select value={config.id} onChange={(e) => updateProvider(e.target.value as ProviderId)} disabled={busy}>{PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label><label className="field"><span>API Key（不會保存）</span><div className="key-input"><input type={showKey ? 'text' : 'password'} value={config.apiKey} onChange={(e) => setConfig({ ...config, apiKey: e.target.value })} autoComplete="off" placeholder="貼上你的 Key" disabled={busy} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? '隱藏' : '顯示'}</button></div></label><label className="field"><span>API Base URL</span><input value={config.baseUrl ?? ''} onChange={(e) => setConfig({ ...config, baseUrl: e.target.value })} disabled={busy} /></label></div>
         <p className="hint">{PROVIDERS.find((provider) => provider.id === config.id)?.hint}</p><button className="secondary" onClick={testProvider} disabled={busy || !config.apiKey}>{busy ? '測試中…' : '測試 Key 並讀取模型'}</button>{models.length > 0 && <label className="field model-select"><span>選擇模型</span><select value={config.modelId ?? ''} onChange={(e) => setConfig({ ...config, modelId: e.target.value })}>{models.map((model) => <option key={model.id} value={model.id}>{model.displayName}（{model.id}）</option>)}</select></label>}
       </section>
 
-      <section className="panel output-panel"><div className="section-heading"><span className="step">5</span><div><h2>產生會議成果</h2><p>先產生草稿，再人工核對；產品不會自動寄信或建立行事曆。</p></div></div><div className="controls-row"><button className="primary" onClick={() => generate(true)} disabled={busy || !segments.length || !config.modelId}>使用選定模型整理</button><button className="secondary" onClick={() => generate(false)} disabled={busy || !segments.length}>只建立本地結構草稿</button></div>{output && <div className="output-actions"><button onClick={() => download('01_會後通知信.md', output.notice)}>下載通知信</button><button onClick={() => download('02_完整會議紀錄.md', output.minutes)}>下載完整紀錄</button><button onClick={() => download('03_本次待辦事項.md', output.actions)}>下載待辦</button><button onClick={() => download('04_下次會議議程.md', output.agenda)}>下載議程</button><button onClick={() => download('05_會議成果彙整_A4列印.html', output.a4Html, 'text/html;charset=utf-8')}>下載 A4 HTML</button></div>}{output && <details className="preview"><summary>預覽通知信草稿</summary><pre>{output.notice}</pre></details>}</section>
+      <section className="panel output-panel"><div className="section-heading"><span className="step">5</span><div><h2>產生會議成果</h2><p>先產生草稿，再人工核對；產品不會自動寄信或建立行事曆。</p></div></div><div className="controls-row"><button className="primary" onClick={() => generate(true)} disabled={busy || !segments.length || !config.modelId}>使用選定模型整理</button><button className="secondary" onClick={() => generate(false)} disabled={busy || !segments.length}>只建立本地結構草稿</button></div>{correctionResult && <div className="correction-review"><h3>文字校正確認</h3><p className="hint">紅色文字是模型建議的編修詞。預設為「同意編修」；請逐項選擇後再套用到匯出草稿。</p>{correctionResult.changes.length ? <div className="correction-list">{correctionResult.changes.map((change, index) => <div className="correction-item" key={`${change.from}-${change.to}-${index}`}><div className="correction-text"><span>原文：{change.from}</span><span>建議：<mark className="correction-red">{change.to}</mark></span><small>{change.reason}（信心：{change.confidence}）</small></div><select value={correctionDecisions[index] ?? 'accept'} onChange={(event) => setCorrectionDecisions((current) => ({ ...current, [index]: event.target.value as CorrectionDecision }))}><option value="keep">維持原文</option><option value="accept">同意編修</option><option value="custom">自己輸入</option></select>{correctionDecisions[index] === 'custom' && <input className="custom-correction" value={customCorrections[index] ?? ''} placeholder="輸入要使用的文字" onChange={(event) => setCustomCorrections((current) => ({ ...current, [index]: event.target.value }))} />}</div>)}</div> : <p className="empty">模型沒有回傳可辨識的編修詞。</p>}<div className="approved-preview"><strong>核准後文字預覽</strong><p>{approvedCorrectionText || correctionResult.revisedText}</p></div><button className="secondary" onClick={applyCorrectionsToOutput} disabled={!output || !correctionResult}>套用文字校正到匯出草稿</button></div>}{output && <div className="output-actions"><button onClick={() => download('01_會後通知信.md', output.notice)}>下載通知信</button><button onClick={() => download('02_完整會議紀錄.md', output.minutes)}>下載完整紀錄</button><button onClick={() => download('03_本次待辦事項.md', output.actions)}>下載待辦</button><button onClick={() => download('04_下次會議議程.md', output.agenda)}>下載議程</button><button onClick={() => download('05_會議成果彙整_A4列印.html', output.a4Html, 'text/html;charset=utf-8')}>下載 A4 HTML</button></div>}{output && <details className="preview"><summary>預覽通知信草稿</summary><pre>{output.notice}</pre></details>}</section>
     </main>
   </div>
 }

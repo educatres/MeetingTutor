@@ -1,4 +1,4 @@
-import type { GlossaryTerm, MeetingOutput, ReferenceDocument, TranscriptSegment } from '../types'
+import type { GlossaryTerm, Language, MeetingOutput, ReferenceDocument, TranscriptSegment } from '../types'
 
 const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 const textLines = (segments: TranscriptSegment[]) => segments.map((segment) => `[${formatTime(segment.start)}] ${segment.speaker ? `${segment.speaker}: ` : ''}${segment.text}`).join('\n')
@@ -13,10 +13,11 @@ function transcriptForPrompt(segments: TranscriptSegment[]) {
   return segments.map((segment) => `${formatTime(segment.start)} ${segment.speaker || '未指定說話者'}：${segment.text}`).join('\n').slice(0, 28_000)
 }
 
-export function createPrompt(segments: TranscriptSegment[], references: ReferenceDocument[], glossary: GlossaryTerm[]) {
+export function createPrompt(segments: TranscriptSegment[], references: ReferenceDocument[], glossary: GlossaryTerm[], language: Language) {
   const terms = glossary.map((term) => `${term.kind}：${term.canonical}${term.aliases ? `（別名：${term.aliases}）` : ''}${term.locked ? '【已確認，禁止擅改】' : ''}`).join('\n') || '（沒有使用者確認的詞彙）'
   const refs = references.map((reference) => `### ${reference.name}\n${reference.text.slice(0, 8_000)}`).join('\n\n') || '（沒有參考資料）'
-  return `你是 MeetingTutor 的會議文件整理助理。只根據逐字稿與參考資料工作，不得虛構姓名、日期、期限、決議、投票或理由。使用者確認的詞彙不可擅自改寫；不確定的姓名與專有名詞請列入 uncertainties，保留原文。先做語句修飾，再提供可追溯的變更與來源。\n\n請只回傳 JSON，符合：{"revisedText":"...","changes":[{"from":"...","to":"...","reason":"...","confidence":"high|medium|low"}],"terms":[{"source":"...","suggested":"...","status":"confirmed|candidate|uncertain","evidence":["..."]}],"uncertainties":["..."],"evidence":[{"claim":"...","source":"transcript#segment"}]}。\n\n使用者確認詞彙：\n${terms}\n\n參考資料：\n${refs}\n\n逐字稿：\n${transcriptForPrompt(segments)}`
+  const outputLanguage = language === 'zh' ? '繁體中文（zh-Hant；禁止輸出簡體中文）' : '英文（English）'
+  return `你是 MeetingTutor 的會議文件整理助理。只根據逐字稿與參考資料工作，不得虛構姓名、日期、期限、決議、投票或理由。使用者確認的詞彙不可擅自改寫；不確定的姓名與專有名詞請列入 uncertainties，保留原文。先做語句修飾，再提供可追溯的變更與來源。所有 revisedText、變更理由、待確認事項與會議文件內容必須使用${outputLanguage}。\n\n請只回傳 JSON，符合：{"revisedText":"...","changes":[{"from":"...","to":"...","reason":"...","confidence":"high|medium|low"}],"terms":[{"source":"...","suggested":"...","status":"confirmed|candidate|uncertain","evidence":["..."]}],"uncertainties":["..."],"evidence":[{"claim":"...","source":"transcript#segment"}]}。\n\n使用者確認詞彙：\n${terms}\n\n參考資料：\n${refs}\n\n逐字稿：\n${transcriptForPrompt(segments)}`
 }
 
 export function localOutputs(segments: TranscriptSegment[], references: ReferenceDocument[], glossary: GlossaryTerm[]): MeetingOutput {
