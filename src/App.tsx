@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import './styles.css'
-import type { GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, ReferenceDocument, TranscriptSegment } from './types'
-import { PROVIDERS, generateText, listModels, providerLabel } from './lib/providers'
+import type { CguAudioModel, GlossaryTerm, Language, LocalWhisperModel, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, ReferenceDocument, TranscriptSegment, WhisperModel } from './types'
+import { PROVIDERS, generateText, listModels, providerLabel, transcribeWithCgu } from './lib/providers'
 import { readReference } from './lib/references'
 import { cleanPlainTextOutput, createPrompt, extractPlainTextSection } from './lib/outputs'
 import { transcribe } from './lib/transcription'
@@ -72,6 +72,21 @@ function downloadTextFile(name: string, content: string) {
 type ModelTestStatus = 'idle' | 'testing' | 'available' | 'empty' | 'error'
 type GenerationStatus = { kind: 'working' | 'success' | 'error'; message: string }
 type RecordTemplate = 'meeting' | 'class'
+const CGU_AUDIO_MODELS: Array<{ id: CguAudioModel; label: string }> = [
+  { id: 'whisper-1', label: 'CGU API｜whisper-1' },
+  { id: 'tts-1', label: 'CGU API｜tts-1' },
+  { id: 'tts-1-hd', label: 'CGU API｜tts-1-hd' },
+  { id: 'gpt-transcribe', label: 'CGU API｜gpt-transcribe' },
+]
+
+function isCguAudioModel(model: WhisperModel): model is CguAudioModel {
+  return CGU_AUDIO_MODELS.some((item) => item.id === model)
+}
+
+function isLocalWhisperModel(model: WhisperModel): model is LocalWhisperModel {
+  return model === 'tiny' || model === 'base' || model === 'medium'
+}
+
 const SYSTEM_PROMPT_EXAMPLES = [
   { label: '正式會議紀錄', prompt: '請將口語內容整理為正式、精簡的繁體中文，保留原意與各方立場，不新增逐字稿未提及的事實。', template: 'meeting' as const },
   { label: '決議與待辦優先', prompt: '請優先整理會議決議、待辦事項、負責人、期限與未決問題；逐字稿沒有明確資訊時請標示「待確認」，不要自行推測。', template: 'meeting' as const },
@@ -82,7 +97,7 @@ const SYSTEM_PROMPT_EXAMPLES = [
 
 export default function App() {
   const [language, setLanguage] = useState<Language>('zh')
-  const [whisperModel, setWhisperModel] = useState<'tiny' | 'base' | 'medium'>('base')
+  const [whisperModel, setWhisperModel] = useState<WhisperModel>('base')
   const [audioFile, setAudioFile] = useState<File | null>(null)
   const [transcriptFile, setTranscriptFile] = useState<File | null>(null)
   const [uploadedTranscriptSegments, setUploadedTranscriptSegments] = useState<TranscriptSegment[]>([])
@@ -168,6 +183,7 @@ export default function App() {
   const updateProvider = (id: ProviderId) => {
     const provider = PROVIDERS.find((item) => item.id === id)!
     setConfig({ id, apiKey: storedApiKey(id), baseUrl: provider.defaultBaseUrl, modelId: undefined, reasoningEffort: id === 'cgu' ? 'medium' : undefined })
+    if (id !== 'cgu') setWhisperModel((current) => isCguAudioModel(current) ? 'base' : current)
     setModels([])
     setModelTestStatus('idle')
   }
@@ -264,13 +280,16 @@ export default function App() {
     setBusy(true)
     setStatus('正在讀取音訊並準備模型…')
     try {
-      const result = await transcribe(audioFile, language, whisperModel, (progress) => {
+      const onProgress = (progress: { status?: string; progress?: number; phase?: 'model' | 'transcribing'; indeterminate?: boolean }) => {
         const phase = progress.phase ?? (progress.status?.includes('辨識') ? 'transcribing' : 'model')
         const hasProgress = typeof progress.progress === 'number' && Number.isFinite(progress.progress)
         const value = hasProgress ? Math.min(100, Math.max(0, progress.progress ?? 0)) : 0
         const percent = !progress.indeterminate && hasProgress ? ` ${Math.round(value)}%` : ''
         setStatus(`${progress.status ?? '處理中…'}${percent}`)
-      }, (partialSegments) => setSegments(partialSegments))
+      }
+      const result = isCguAudioModel(whisperModel)
+        ? await transcribeWithCgu(config, audioFile, language, whisperModel, onProgress, (partialSegments) => setSegments(partialSegments))
+        : await transcribe(audioFile, language, isLocalWhisperModel(whisperModel) ? whisperModel : 'base', onProgress, (partialSegments) => setSegments(partialSegments))
       setSegments(result)
       setStatus(`完成轉錄，共 ${result.length} 個段落。`)
     } catch (error) {
@@ -403,7 +422,8 @@ export default function App() {
 
     <main className="workspace">
       <section className="panel"><div className="section-heading"><span className="step">1</span><div><h2>取得音訊或上傳逐字稿</h2><p>轉寫語言預設為中文，也可選擇英文。</p></div></div>
-        <div className="controls-row"><label className="field"><span>轉寫語言</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} disabled={busy}><option value="zh">中文（繁體／多語模型）</option><option value="en">English（英文模型）</option></select></label><label className="field"><span>Whisper 模型</span><select value={whisperModel} onChange={(event) => setWhisperModel(event.target.value as 'tiny' | 'base' | 'medium')} disabled={busy}><option value="medium">Whisper-medium（最準確、需要較多記憶體）</option><option value="base">Whisper-base（預設，較準確）</option><option value="tiny">Whisper-tiny（較快、較省資源）</option></select></label><label className="file-picker"><span>選擇音訊</span><input type="file" accept="audio/*,video/*" onChange={onAudioChange} disabled={busy} /></label><button className="secondary" onClick={recording ? stopRecording : startRecording} disabled={busy}>{recording ? '停止錄音' : '開始錄音'}</button></div>
+        <div className="controls-row"><label className="field"><span>轉寫語言</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} disabled={busy}><option value="zh">中文（繁體／多語模型）</option><option value="en">English（英文模型）</option></select></label><label className="field"><span>Whisper 模型</span><select value={whisperModel} onChange={(event) => setWhisperModel(event.target.value as WhisperModel)} disabled={busy}><option value="medium">Whisper-medium（最準確、需要較多記憶體）</option><option value="base">Whisper-base（預設，較準確）</option><option value="tiny">Whisper-tiny（較快、較省資源）</option>{config.id === 'cgu' && CGU_AUDIO_MODELS.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}</select></label><label className="file-picker"><span>選擇音訊</span><input type="file" accept="audio/*,video/*" onChange={onAudioChange} disabled={busy} /></label><button className="secondary" onClick={recording ? stopRecording : startRecording} disabled={busy}>{recording ? '停止錄音' : '開始錄音'}</button></div>
+        {config.id === 'cgu' && isCguAudioModel(whisperModel) && <p className="cgu-audio-note" role="status">目前使用 CGU API 的 {whisperModel} 模型轉錄音訊。</p>}
         {whisperModel === 'medium' && <p className="model-warning" role="alert">提醒：Whisper-medium 模型很大，需要電腦硬體足夠好才能跑完，處理過程可能中斷。</p>}
         <div className="controls-row transcript-upload-row"><label className="file-picker wide"><span>或上傳 Teams 逐字稿（.vtt／.txt／.srt）</span><input type="file" accept=".vtt,.txt,.srt,text/vtt,text/plain" onChange={onTranscriptChange} disabled={busy} /></label></div>
         {audioFile && <p className="file-note">已準備：{audioFile.name}（{Math.round(audioFile.size / 1024)} KB）</p>}

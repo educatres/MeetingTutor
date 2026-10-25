@@ -74,6 +74,7 @@ button { cursor: pointer; }
 .model-available { color: #17633b; background: #e8f6ee; border: 1px solid #a9dbbc; }
 .model-unavailable { color: #805c13; background: #fff8e5; border: 1px solid #e4c979; }
 .model-warning { margin: 10px 0 0; padding: 10px 12px; border: 1px solid #e4c979; border-radius: 7px; background: #fff8e5; color: #805c13 !important; font-size: 13px; font-weight: 700; }
+.cgu-audio-note { margin: 10px 0 0; padding: 9px 11px; border: 1px solid #a9d2bd; border-radius: 7px; background: #edf9f1; color: #17633b !important; font-size: 13px; font-weight: 700; }
 .glossary-form { align-items: stretch; }
 .glossary-input { flex: 1; min-width: 240px; resize: vertical; }
 .chips { display: flex; gap: 7px; flex-wrap: wrap; margin: 12px 0; }
