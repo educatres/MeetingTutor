@@ -71,6 +71,11 @@ button { cursor: pointer; }
 .model-select { margin-top: 14px; max-width: 100%; }
 .system-prompt-panel { margin-top: 16px; padding: 14px; border: 1px solid #c8dce5; border-radius: 8px; background: #f7fbfc; }
 .system-prompt-panel textarea { width: 100%; min-height: 116px; resize: vertical; border: 1px solid #bdcbd3; border-radius: 7px; padding: 10px 11px; color: #253640; background: #fff; line-height: 1.55; }
+.system-prompt-examples { margin-top: 10px; }
+.system-prompt-examples > span { display: block; margin-bottom: 7px; color: #516370; font-size: 12px; font-weight: 700; }
+.system-prompt-examples > div { display: flex; gap: 7px; flex-wrap: wrap; }
+.system-prompt-examples button { border: 1px solid #a9c9d6; border-radius: 999px; padding: 7px 11px; color: #205a6f; background: #edf7fa; font-size: 13px; font-weight: 700; }
+.system-prompt-examples button:hover:not(:disabled) { background: #dceef4; }
 .system-prompt-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 9px; color: #637782; font-size: 12px; }
 .system-prompt-meta .secondary { flex: none; padding: 7px 11px; }
 .output-panel { border-color: #a9c7d4; }

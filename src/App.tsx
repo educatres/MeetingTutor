@@ -56,6 +56,12 @@ const OUTPUT_ITEMS: Array<{ key: OutputPreviewTarget; label: string; filename: s
   { key: 'agenda', label: '下次會議議程', filename: '04_下次會議議程.md', mime: 'text/markdown;charset=utf-8' },
   { key: 'a4Html', label: 'A4 HTML', filename: '05_會議成果彙整_A4列印.html', mime: 'text/html;charset=utf-8' },
 ]
+const SYSTEM_PROMPT_EXAMPLES = [
+  { label: '正式會議紀錄', prompt: '請將口語內容整理為正式、精簡的繁體中文，保留原意與各方立場，不新增逐字稿未提及的事實。' },
+  { label: '決議與待辦優先', prompt: '請優先整理會議決議、待辦事項、負責人、期限與未決問題；逐字稿沒有明確資訊時請標示「待確認」，不要自行推測。' },
+  { label: '專有名詞保守修正', prompt: '請依照已確認詞彙與參考資料修正人名、組織名及專有名詞；缺乏依據時保留原文並列入待確認事項。' },
+  { label: '保留講者語氣', prompt: '請修正文法、贅詞與重複語句，但保留講者原本的語氣、觀點與不同意見，不要過度改寫。' },
+]
 
 function applyCorrectionChoices(result: GenerationResult, decisions: Record<number, CorrectionDecision>, customValues: Record<number, string>) {
   return result.changes.reduce((text, change, index) => {
@@ -289,6 +295,14 @@ export default function App() {
     setNewTermText('')
   }
 
+  const addSystemPromptExample = (example: string) => {
+    setSystemPrompt((current) => {
+      const existing = current.trim()
+      if (existing.includes(example)) return current
+      return `${existing ? `${existing}\n\n` : ''}${example}`.slice(0, 6000)
+    })
+  }
+
   const generate = async () => {
     if (!segments.length) {
       const message = '請先完成轉錄或載入逐字稿。'
@@ -371,6 +385,7 @@ export default function App() {
         <p className="hint">{PROVIDERS.find((provider) => provider.id === config.id)?.hint}</p><button className="secondary" onClick={testProvider} disabled={busy || !config.apiKey}>{busy ? '測試中…' : '測試 Key 並讀取模型'}</button>{modelTestStatus === 'available' && <p className="model-available" role="status">模型可用（已讀取 {models.length} 個）</p>}{modelTestStatus === 'empty' && <p className="model-unavailable" role="status">測試成功，但沒有可列舉的模型。</p>}{models.length > 0 && <label className="field model-select"><span>選擇模型</span><select value={config.modelId ?? ''} onChange={(e) => setConfig({ ...config, modelId: e.target.value })}>{models.map((model) => <option key={model.id} value={model.id}>{model.displayName}（{model.id}）</option>)}</select></label>}
         <div className="system-prompt-panel">
           <label className="field"><span>AI 修正方向（System Prompt）</span><textarea value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} rows={5} maxLength={6000} disabled={busy} placeholder="例如：保留講者原意，將口語改為正式繁體中文；專有名詞不要自行猜測；摘要優先列出決議、負責人與期限。" /></label>
+          <div className="system-prompt-examples"><span>快速範例（可複選，點擊後追加）</span><div>{SYSTEM_PROMPT_EXAMPLES.map((example) => <button type="button" key={example.label} onClick={() => addSystemPromptExample(example.prompt)} disabled={busy || systemPrompt.includes(example.prompt)} title={example.prompt}>{example.label}</button>)}</div></div>
           <div className="system-prompt-meta"><span>自動保存在此瀏覽器，重新整理後仍會保留。{systemPrompt.length.toLocaleString()} / 6,000 字</span><button type="button" className="secondary" onClick={() => setSystemPrompt('')} disabled={busy || !systemPrompt}>清除指示</button></div>
         </div>
       </section>
