@@ -9,6 +9,18 @@ export const PROVIDERS: Array<{ id: ProviderId; label: string; defaultBaseUrl: s
 
 const cleanBaseUrl = (value: string) => value.replace(/\/$/, '')
 
+export function isAllowedTextModel(model: string | Pick<ModelInfo, 'id' | 'displayName'>) {
+  const label = typeof model === 'string' ? model : `${model.id} ${model.displayName}`
+  const normalized = label.toLowerCase()
+  return normalized.includes('luna')
+    || normalized.includes('nemotron')
+    || normalized.includes('mistral')
+    || normalized.includes('gemma-4')
+    || normalized.includes('gpt-oss:20b')
+    || normalized.includes('gpt-oss:120b')
+    || normalized.includes('pgt-oss:120b')
+}
+
 function parseTimestamp(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     // OpenAI-compatible APIs commonly return Unix seconds; normalize to ms.
@@ -113,7 +125,7 @@ export async function listModels(config: ProviderConfig): Promise<ModelInfo[]> {
       source: 'google' as const,
       created: modelTimestamp(model),
     }))
-    return sortModels(config, models)
+    return sortModels(config, models.filter(isAllowedTextModel))
   }
   const base = cleanBaseUrl(config.baseUrl || PROVIDERS.find((p) => p.id === config.id)?.defaultBaseUrl || '')
   const body = await responseJson(await request(`${base}/models`, { method: 'GET', headers: authHeaders(config.apiKey) }))
@@ -122,7 +134,7 @@ export async function listModels(config: ProviderConfig): Promise<ModelInfo[]> {
     const id = String(model.id ?? model.name ?? '')
     return { id: id.replace(/^models\//, ''), displayName: model.displayName || id, capabilities: ['text-generation'], source: config.id, created: modelTimestamp(model) }
   }).filter((model: ModelInfo) => model.id)
-  return sortModels(config, models)
+  return sortModels(config, models.filter(isAllowedTextModel))
 }
 
 function responsesText(body: any): string {
