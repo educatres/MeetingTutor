@@ -16,7 +16,14 @@ async function getTranscriber(model: string) {
     currentTranscriber = await createPipeline('automatic-speech-recognition', model, {
       quantized: true,
       progress_callback: (progress: { status?: string; progress?: number; file?: string }) => {
-        workerScope.postMessage({ status: 'progress', data: progress })
+        const status = progress.status === 'initiate'
+          ? `開始下載模型檔：${progress.file ?? ''}`
+          : progress.status === 'progress'
+            ? `下載模型檔：${progress.file ?? ''}`
+            : progress.status === 'done'
+              ? `模型檔下載完成：${progress.file ?? ''}`
+              : progress.status
+        workerScope.postMessage({ status: 'progress', data: { ...progress, status } })
       },
     }) as unknown as (audio: Float32Array, options: Record<string, unknown>) => Promise<any>
   }

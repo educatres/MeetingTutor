@@ -92,7 +92,10 @@ export default function App() {
       setSegments(result)
       setStatus(`完成轉錄，共 ${result.length} 個段落。`)
     } catch (error) {
-      setStatus(`轉錄失敗：${error instanceof Error ? error.message : String(error)}`)
+      const message = error instanceof Error ? error.message : String(error)
+      setStatus(message.toLowerCase().includes('fetch')
+        ? '轉錄失敗：無法下載 Whisper 模型檔（Failed to fetch）。請確認網路連線、重新整理頁面，或先改用 Whisper-tiny。'
+        : `轉錄失敗：${message}`)
     } finally {
       setBusy(false)
     }
