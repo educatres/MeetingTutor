@@ -4,7 +4,7 @@ export const PROVIDERS: Array<{ id: ProviderId; label: string; defaultBaseUrl: s
   { id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', hint: '支援 OpenAI 相容的 models 與 chat/completions。' },
   { id: 'xai', label: 'Grok（xAI）', defaultBaseUrl: 'https://api.x.ai/v1', hint: '以 xAI 的 OpenAI 相容 API 為基線。' },
   { id: 'google', label: 'Google Gemini', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta', hint: '使用 Gemini models 與 generateContent。' },
-  { id: 'cgu', label: 'CGU', defaultBaseUrl: '', hint: '請填入 CGU 正式 API endpoint；操作頁本身不是可假設的 REST API。' },
+  { id: 'cgu', label: 'CGU', defaultBaseUrl: 'https://air.cgu.edu.tw/cgullmapi/v1', hint: '使用 CGU LLM API v1；若瀏覽器遭到 CORS 阻擋，請依 CGU 服務政策處理。' },
 ]
 
 const cleanBaseUrl = (value: string) => value.replace(/\/$/, '')
@@ -49,9 +49,6 @@ export async function listModels(config: ProviderConfig): Promise<ModelInfo[]> {
       capabilities: ['text-generation'],
       source: 'google' as const,
     }))
-  }
-  if (config.id === 'cgu' && !config.baseUrl?.trim()) {
-    throw new Error('CGU API endpoint 尚未確認。請輸入可程式化且允許瀏覽器呼叫的正式 endpoint；api_call.html 操作頁不能直接當作 models API。')
   }
   const base = cleanBaseUrl(config.baseUrl || PROVIDERS.find((p) => p.id === config.id)?.defaultBaseUrl || '')
   const body = await responseJson(await request(`${base}/models`, { method: 'GET', headers: authHeaders(config.apiKey) }))

@@ -9,7 +9,7 @@
 - [開發手冊](docs/02_開發手冊.md)
 - [實施路線圖與驗收計畫](docs/03_實施路線圖與驗收計畫.md)
 
-目前版本是可部署至 GitHub Pages 的靜態前端：以瀏覽器端 Whisper 進行語音轉錄，讓使用者自行提供並測試 OpenAI、xAI／Grok、Google 或 CGU 的 API Key，再以使用者選定的文字模型修飾語句、參照 PDF／文字資料並產出會議文件。CGU 仍需要正式 API 契約與 CORS 確認；若未提供可程式化 endpoint，介面會明確阻止假成功，不會把操作頁當成 REST API。
+目前版本是可部署至 GitHub Pages 的靜態前端：以瀏覽器端 Whisper-base（可切換 Whisper-tiny）進行語音轉錄，讓使用者自行提供並測試 OpenAI、xAI／Grok、Google 或 CGU 的 API Key，再以使用者選定的文字模型修飾語句、參照 PDF／文字資料並產出會議文件。CGU base URL 已預設為 `https://air.cgu.edu.tw/cgullmapi/v1`；仍需要確認模型清單格式與 CORS 政策，介面不會把操作頁當成 REST API。
 
 本機開發：`npm install` → `npm run dev`；發布建置：`npm run build`。GitHub Actions 已設定為推送 `main` 後部署 GitHub Pages。
 
@@ -19,7 +19,7 @@
 
 ## MVP 已知限制
 
-- CGU 需要正式 API endpoint、模型清單格式與 CORS 政策；在此資訊確認前，介面會拒絕假成功。
+- CGU 已預設 base URL，但仍需要確認模型清單格式與 CORS 政策；若呼叫不符合正式契約，介面會拒絕假成功。
 - OpenAI、xAI、Google 是否允許瀏覽器直連取決於各服務的 CORS／帳戶設定；失敗時需使用供應商允許的 endpoint 或日後另建受控 relay。
 - Whisper 模型與 ONNX runtime 初次下載較大，第一次轉錄需要等待；目前使用 WASM 基線，尚未加入 WebGPU 自動切換。
 - MVP 以段落編輯與人工標記 speaker 為主，尚未提供可靠的自動說話者分離。

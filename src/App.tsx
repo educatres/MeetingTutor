@@ -27,13 +27,14 @@ function formatSeconds(seconds: number) {
 
 export default function App() {
   const [language, setLanguage] = useState<Language>('zh')
+  const [whisperModel, setWhisperModel] = useState<'tiny' | 'base'>('base')
   const [audioFile, setAudioFile] = useState<File | null>(null)
   const [recording, setRecording] = useState(false)
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
   const [segments, setSegments] = useState<TranscriptSegment[]>([])
   const [references, setReferences] = useState<ReferenceDocument[]>([])
   const [glossary, setGlossary] = useState<GlossaryTerm[]>([])
-  const [newTerm, setNewTerm] = useState<GlossaryTerm>({ canonical: '', aliases: '', kind: '其他', locked: true })
+  const [newTermText, setNewTermText] = useState('')
   const [config, setConfig] = useState<ProviderConfig>(initialConfig)
   const [models, setModels] = useState<ModelInfo[]>([])
   const [status, setStatus] = useState('請選擇音訊檔或開始錄音。')
@@ -84,7 +85,7 @@ export default function App() {
     if (!audioFile) return setStatus('請先選擇音訊檔或完成錄音。')
     setBusy(true)
     try {
-      const result = await transcribe(audioFile, language, (progress) => {
+      const result = await transcribe(audioFile, language, whisperModel, (progress) => {
         const percent = typeof progress.progress === 'number' ? ` ${Math.round(progress.progress)}%` : ''
         setStatus(`${progress.status ?? '處理中…'}${percent}`)
       })
@@ -125,9 +126,10 @@ export default function App() {
   }
 
   const addTerm = () => {
-    if (!newTerm.canonical.trim()) return
-    setGlossary((current) => [...current, { ...newTerm, canonical: newTerm.canonical.trim() }])
-    setNewTerm({ canonical: '', aliases: '', kind: '其他', locked: true })
+    const terms = newTermText.split(/[\n,，、;；]+/).map((term) => term.trim()).filter(Boolean)
+    if (!terms.length) return
+    setGlossary((current) => [...current, ...terms.filter((term) => !current.some((item) => item.canonical === term)).map((canonical) => ({ canonical, aliases: '', kind: '其他' as const, locked: true }))])
+    setNewTermText('')
   }
 
   const updateSegment = (id: string, text: string) => setSegments((current) => current.map((segment) => segment.id === id ? { ...segment, text } : segment))
@@ -157,20 +159,20 @@ export default function App() {
 
   return <div className="app-shell">
     <header className="hero">
-      <div><p className="eyebrow">MEETINGTUTOR · LOCAL-FIRST</p><h1>會議記錄轉錄器</h1><p>在瀏覽器中轉錄，再用你自己的模型修飾語句與整理會議文件。</p></div>
+      <div><p className="eyebrow">MeetingTutor</p><h1>會議記錄轉錄器</h1><p className="hardware-note">最低硬體建議：四核心現代處理器、8 GB RAM、至少 2 GB 可用空間；使用最新版 Chrome／Edge／Firefox，WebGPU 可用時速度較佳。</p></div>
       <div className="privacy-badge">🔒 音訊預設只在本機處理<br /><small>API Key 不會寫入專案</small></div>
     </header>
 
     <main className="workspace">
       <section className="panel"><div className="section-heading"><span className="step">1</span><div><h2>取得音訊</h2><p>轉寫語言預設為中文，也可選擇英文。</p></div></div>
-        <div className="controls-row"><label className="field"><span>轉寫語言</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} disabled={busy}><option value="zh">中文（繁體／多語模型）</option><option value="en">English（英文模型）</option></select></label><label className="file-picker"><span>選擇音訊</span><input type="file" accept="audio/*,video/*" onChange={onAudioChange} disabled={busy} /></label><button className="secondary" onClick={recording ? stopRecording : startRecording} disabled={busy}>{recording ? '停止錄音' : '開始錄音'}</button></div>
+        <div className="controls-row"><label className="field"><span>轉寫語言</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} disabled={busy}><option value="zh">中文（繁體／多語模型）</option><option value="en">English（英文模型）</option></select></label><label className="field"><span>Whisper 模型</span><select value={whisperModel} onChange={(event) => setWhisperModel(event.target.value as 'tiny' | 'base')} disabled={busy}><option value="base">Whisper-base（預設，較準確）</option><option value="tiny">Whisper-tiny（較快、較省資源）</option></select></label><label className="file-picker"><span>選擇音訊</span><input type="file" accept="audio/*,video/*" onChange={onAudioChange} disabled={busy} /></label><button className="secondary" onClick={recording ? stopRecording : startRecording} disabled={busy}>{recording ? '停止錄音' : '開始錄音'}</button></div>
         {audioFile && <p className="file-note">已準備：{audioFile.name}（{Math.round(audioFile.size / 1024)} KB）</p>}
         <button className="primary" onClick={runTranscription} disabled={busy || !audioFile}>{busy ? '處理中…' : '開始轉錄'}</button>
         <p className="status" role="status">{status}</p>
       </section>
 
       <section className="panel"><div className="section-heading"><span className="step">2</span><div><h2>逐字稿與詞彙</h2><p>原文保留；人名／專有名詞請先加入已確認詞彙。</p></div></div>
-        <div className="glossary-form"><input placeholder="正確寫法，例如：MeetingTutor" value={newTerm.canonical} onChange={(e) => setNewTerm({ ...newTerm, canonical: e.target.value })} /><input placeholder="別名（可選）" value={newTerm.aliases} onChange={(e) => setNewTerm({ ...newTerm, aliases: e.target.value })} /><select value={newTerm.kind} onChange={(e) => setNewTerm({ ...newTerm, kind: e.target.value as GlossaryTerm['kind'] })}><option>姓名</option><option>專案</option><option>產品</option><option>其他</option></select><button className="secondary" onClick={addTerm}>加入詞彙</button></div>
+        <div className="glossary-form"><textarea className="glossary-input" rows={2} placeholder="輸入姓名或專有名詞，以逗號或換行分隔，例如：王小明、MeetingTutor、CGU" value={newTermText} onChange={(e) => setNewTermText(e.target.value)} /><button className="secondary" onClick={addTerm}>加入詞彙</button></div>
         {glossary.length > 0 && <div className="chips">{glossary.map((term) => <button key={`${term.canonical}-${term.kind}`} className="chip" onClick={() => setGlossary((current) => current.filter((item) => item !== term))}>{term.kind}：{term.canonical} ×</button>)}</div>}
         <div className="transcript-box">{segments.length ? segments.map((segment) => <div className="segment" key={segment.id}><span className="timestamp">{formatSeconds(segment.start)}</span><textarea value={segment.text} onChange={(e) => updateSegment(segment.id, e.target.value)} aria-label={`逐字稿 ${formatSeconds(segment.start)}`} /></div>) : <p className="empty">完成轉錄後，逐字稿會出現在這裡。</p>}</div>
       </section>
@@ -178,12 +180,11 @@ export default function App() {
       <section className="panel"><div className="section-heading"><span className="step">3</span><div><h2>參考資料</h2><p>加入 PDF、TXT 或 Markdown，協助校正專有名詞與姓名。</p></div></div><label className="file-picker wide"><span>加入參考檔案</span><input type="file" accept="application/pdf,text/plain,text/markdown,.md,.txt" multiple onChange={addReferences} disabled={busy} /></label>{references.length > 0 && <ul className="reference-list">{references.map((reference) => <li key={reference.id}><span>{reference.name}</span><small>{reference.type === 'pdf' ? `${reference.pages} 頁` : `${reference.text.length.toLocaleString()} 字`}</small><button onClick={() => setReferences((current) => current.filter((item) => item.id !== reference.id))}>移除</button></li>)}</ul>}<p className="hint">掃描型 PDF 沒有文字層時，系統會提示需要 OCR，不會假裝讀取成功。</p></section>
 
       <section className="panel"><div className="section-heading"><span className="step">4</span><div><h2>連接你的模型</h2><p>Key 只在目前工作階段使用；測試成功後才會顯示模型。</p></div></div>
-        <div className="provider-grid"><label className="field"><span>Provider</span><select value={config.id} onChange={(e) => updateProvider(e.target.value as ProviderId)} disabled={busy}>{PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label><label className="field"><span>API Key（不會保存）</span><div className="key-input"><input type={showKey ? 'text' : 'password'} value={config.apiKey} onChange={(e) => setConfig({ ...config, apiKey: e.target.value })} autoComplete="off" placeholder="貼上你的 Key" disabled={busy} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? '隱藏' : '顯示'}</button></div></label><label className="field"><span>{config.id === 'cgu' ? 'CGU API endpoint（需正式契約）' : 'API Base URL'}</span><input value={config.baseUrl ?? ''} onChange={(e) => setConfig({ ...config, baseUrl: e.target.value })} placeholder={config.id === 'cgu' ? '尚待確認，例如 https://…/v1' : undefined} disabled={busy} /></label></div>
+        <div className="provider-grid"><label className="field"><span>Provider</span><select value={config.id} onChange={(e) => updateProvider(e.target.value as ProviderId)} disabled={busy}>{PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label><label className="field"><span>API Key（不會保存）</span><div className="key-input"><input type={showKey ? 'text' : 'password'} value={config.apiKey} onChange={(e) => setConfig({ ...config, apiKey: e.target.value })} autoComplete="off" placeholder="貼上你的 Key" disabled={busy} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? '隱藏' : '顯示'}</button></div></label><label className="field"><span>API Base URL</span><input value={config.baseUrl ?? ''} onChange={(e) => setConfig({ ...config, baseUrl: e.target.value })} disabled={busy} /></label></div>
         <p className="hint">{PROVIDERS.find((provider) => provider.id === config.id)?.hint}</p><button className="secondary" onClick={testProvider} disabled={busy || !config.apiKey}>{busy ? '測試中…' : '測試 Key 並讀取模型'}</button>{models.length > 0 && <label className="field model-select"><span>選擇模型</span><select value={config.modelId ?? ''} onChange={(e) => setConfig({ ...config, modelId: e.target.value })}>{models.map((model) => <option key={model.id} value={model.id}>{model.displayName}（{model.id}）</option>)}</select></label>}
       </section>
 
       <section className="panel output-panel"><div className="section-heading"><span className="step">5</span><div><h2>產生會議成果</h2><p>先產生草稿，再人工核對；產品不會自動寄信或建立行事曆。</p></div></div><div className="controls-row"><button className="primary" onClick={() => generate(true)} disabled={busy || !segments.length || !config.modelId}>使用選定模型整理</button><button className="secondary" onClick={() => generate(false)} disabled={busy || !segments.length}>只建立本地結構草稿</button></div>{output && <div className="output-actions"><button onClick={() => download('01_會後通知信.md', output.notice)}>下載通知信</button><button onClick={() => download('02_完整會議紀錄.md', output.minutes)}>下載完整紀錄</button><button onClick={() => download('03_本次待辦事項.md', output.actions)}>下載待辦</button><button onClick={() => download('04_下次會議議程.md', output.agenda)}>下載議程</button><button onClick={() => download('05_會議成果彙整_A4列印.html', output.a4Html, 'text/html;charset=utf-8')}>下載 A4 HTML</button></div>}{output && <details className="preview"><summary>預覽通知信草稿</summary><pre>{output.notice}</pre></details>}</section>
     </main>
-    <footer>MeetingTutor MVP · 本頁不代管 API Key · 請依會議資料人工核准 AI 產出</footer>
   </div>
 }
