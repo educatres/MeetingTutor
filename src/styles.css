@@ -55,6 +55,7 @@ button { cursor: pointer; }
 .section-heading p { margin: 0; color: #667783; font-size: 14px; }
 .step { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #dbeaf2; color: #1f5570; font-weight: 800; flex: none; }
 .controls-row, .provider-grid, .glossary-form { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.action-row-centered { display: flex; justify-content: center; margin-top: 12px; }
 .transcript-upload-row { margin-top: 8px; }
 .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 190px; }
 .field > span { font-size: 13px; color: #516370; font-weight: 700; }
