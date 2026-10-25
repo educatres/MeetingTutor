@@ -1,4 +1,4 @@
-import { env, pipeline } from '@huggingface/transformers'
+import { env, pipeline, WhisperTextStreamer } from '@huggingface/transformers'
 
 type WorkerScope = {
   onmessage: ((event: MessageEvent) => void) | null
@@ -11,7 +11,8 @@ env.useBrowserCache = true
 env.allowRemoteModels = true
 env.allowLocalModels = false
 let currentModel = ''
-let currentTranscriber: ((audio: Float32Array, options: Record<string, unknown>) => Promise<any>) | null = null
+type Transcriber = ((audio: Float32Array, options: Record<string, unknown>) => Promise<any>) & { tokenizer: ConstructorParameters<typeof WhisperTextStreamer>[0] }
+let currentTranscriber: Transcriber | null = null
 
 async function getTranscriber(model: string) {
   if (!currentTranscriber || currentModel !== model) {
@@ -29,7 +30,7 @@ async function getTranscriber(model: string) {
               : progress.status
         workerScope.postMessage({ status: 'progress', data: { ...progress, status, phase: 'model', indeterminate: typeof progress.progress !== 'number' } })
       },
-    }) as unknown as (audio: Float32Array, options: Record<string, unknown>) => Promise<any>
+    }) as unknown as Transcriber
   }
   return currentTranscriber
 }
@@ -40,6 +41,14 @@ workerScope.onmessage = async (event) => {
   try {
     const transcriber = await getTranscriber(message.model)
     workerScope.postMessage({ status: 'ready' })
+    let streamedText = ''
+    const streamer = new WhisperTextStreamer(transcriber.tokenizer, {
+      skip_prompt: true,
+      callback_function: (text: string) => {
+        streamedText += text
+        workerScope.postMessage({ status: 'partial', data: { text: streamedText } })
+      },
+    })
     const result = await transcriber(message.audio, {
       top_k: 0,
       do_sample: false,
@@ -48,6 +57,7 @@ workerScope.onmessage = async (event) => {
       language: message.language,
       task: 'transcribe',
       return_timestamps: true,
+      streamer,
     })
     workerScope.postMessage({ status: 'complete', data: result })
   } catch (error) {

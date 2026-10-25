@@ -4,6 +4,7 @@ type Progress = { status?: string; progress?: number; file?: string; phase?: 'mo
 type WorkerResponse =
   | { status: 'progress'; data: Progress }
   | { status: 'ready' }
+  | { status: 'partial'; data: { text?: string } }
   | { status: 'complete'; data: { text?: string; chunks?: Array<{ text?: string; timestamp?: [number, number] }> } }
   | { status: 'error'; data: { message: string } }
 
@@ -18,6 +19,17 @@ function getWorker() {
     transcriptionWorker = new Worker(new URL('./transcription.worker.ts', import.meta.url), { type: 'module' })
   }
   return transcriptionWorker
+}
+
+function liveSegments(text: string): TranscriptSegment[] {
+  const sentences = text.match(/[^。！？!?；;\.\n]+(?:[。！？!?；;\.]|$)/g) ?? []
+  return sentences.map((sentence) => sentence.trim()).filter(Boolean).map((sentence, index) => ({
+    id: `live-segment-${index}`,
+    start: -1,
+    end: -1,
+    text: sentence,
+    originalText: sentence,
+  }))
 }
 
 async function decodeAudio(file: Blob): Promise<Float32Array> {
@@ -56,6 +68,8 @@ export async function transcribe(file: Blob, language: Language, size: 'tiny' | 
         // the UI communicates that work is still progressing instead of being
         // stuck at a misleading 0%.
         onProgress({ status: '正在辨識語音…', progress: 0, phase: 'transcribing', indeterminate: true })
+      } else if (message.status === 'partial') {
+        onSegments?.(liveSegments(String(message.data.text ?? '')))
       } else if (message.status === 'complete') {
         resolve(message.data)
       } else if (message.status === 'error') {

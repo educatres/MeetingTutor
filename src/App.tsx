@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import './styles.css'
 import type { GenerationResult, GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, ReferenceDocument, TranscriptSegment } from './types'
@@ -33,6 +33,7 @@ function download(name: string, content: string, type = 'text/plain;charset=utf-
 }
 
 function formatSeconds(seconds: number) {
+  if (seconds < 0) return '--:--'
   const minutes = Math.floor(seconds / 60).toString().padStart(2, '0')
   const rest = Math.floor(seconds % 60).toString().padStart(2, '0')
   return `${minutes}:${rest}`
@@ -77,6 +78,7 @@ export default function App() {
   const [customCorrections, setCustomCorrections] = useState<Record<number, string>>({})
   const [hardwareResult, setHardwareResult] = useState<string | null>(null)
   const [showKey, setShowKey] = useState(false)
+  const liveTranscriptRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     try {
@@ -85,6 +87,11 @@ export default function App() {
       window.localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(keys))
     } catch { /* Private browsing or blocked storage: keep the key in memory only. */ }
   }, [config.id, config.apiKey])
+
+  useEffect(() => {
+    const box = liveTranscriptRef.current
+    if (box) box.scrollTop = box.scrollHeight
+  }, [segments])
 
   const transcriptText = useMemo(() => segments.map((segment) => segment.text).join(' '), [segments])
   const approvedCorrectionText = useMemo(() => correctionResult ? applyCorrectionChoices(correctionResult, correctionDecisions, customCorrections) : '', [correctionResult, correctionDecisions, customCorrections])
@@ -330,7 +337,7 @@ export default function App() {
         {transcriptFile && <p className="file-note">已準備 Teams 逐字稿：{transcriptFile.name}（{uploadedTranscriptSegments.length} 段）</p>}
         <p className="hint">Whisper 模型首次下載後會保存於此瀏覽器快取；之後相同模型可直接重用。</p>
         <button className="primary" onClick={runTranscription} disabled={busy || (!audioFile && !transcriptFile)}>{busy ? '處理中…' : transcriptFile && !audioFile ? '載入逐字稿' : '開始轉錄／載入逐字稿'}</button>
-        <div className="live-transcript" aria-live="polite"><div className="live-transcript-heading"><strong>逐句轉錄結果</strong><span>{segments.length ? `目前 ${segments.length} 句` : '完成辨識後會顯示在這裡'}</span></div><div className="live-transcript-box">{segments.length ? segments.map((segment) => <div className="live-segment" key={segment.id}><span className="timestamp">{formatSeconds(segment.start)}</span><span>{segment.text}</span></div>) : <p className="empty">尚未取得轉錄句子。</p>}</div></div>
+        <div className="live-transcript" aria-live="polite"><div className="live-transcript-heading"><strong>逐句轉錄結果</strong><span>{segments.length ? `目前 ${segments.length} 句` : '辨識時會逐句顯示在這裡'}</span></div><div className="live-transcript-box" ref={liveTranscriptRef}>{segments.length ? segments.map((segment) => <div className="live-segment" key={segment.id}><span className="timestamp">{formatSeconds(segment.start)}</span><span>{segment.text}</span></div>) : <p className="empty">尚未取得轉錄句子。</p>}</div></div>
         <p className="status" role="status">{status}</p>
       </section>
 
