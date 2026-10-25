@@ -383,7 +383,7 @@ export default function App() {
       return
     }
     if (!config.apiKey.trim() || !config.modelId) {
-      setGlossaryStatus('請先完成 AI 設定並測試模型。')
+      setGlossaryStatus('請先完成「連接你的AI」並測試模型。')
       setSettingsOpen(true)
       return
     }
@@ -441,7 +441,7 @@ export default function App() {
       return
     }
     if (!config.apiKey.trim() || !config.modelId) {
-      const message = '請先開啟頁首的「AI 設定」，測試 API Key 並選擇模型。'
+      const message = '請先開啟頁首的「連接你的AI」，測試 API Key 並選擇模型。'
       setGenerationStatus({ kind: 'error', message })
       setStatus(message)
       setSettingsOpen(true)
@@ -483,19 +483,19 @@ export default function App() {
 
   return <div className="app-shell">
     <header className="hero">
-      <div className="hero-main"><div className="hero-heading-row"><div className="hero-title-block"><p className="eyebrow">MeetingTutor</p><h1>會議記錄、上課錄音助教</h1></div><div className="header-actions"><button className={config.apiKey && config.modelId ? 'settings-toggle is-ready' : 'settings-toggle'} type="button" onClick={() => setSettingsOpen(true)} aria-expanded={settingsOpen}><span>AI 設定</span><small>{config.apiKey && config.modelId ? `${providerLabel(config.id)}｜${config.modelId}` : '尚未完成設定'}</small></button></div></div>{hardwareResult && <p className="hardware-result" role="status">{hardwareResult}</p>}</div>
-      {settingsOpen && <section className="ai-settings-panel" aria-label="AI 模型設定">
-        <div className="settings-panel-heading"><div><h2>AI 模型設定</h2><p>設定會保存在此瀏覽器；連線正常時，下次開啟可直接沿用。</p></div></div>
+      <div className="hero-main"><div className="hero-heading-row"><div className="hero-title-block"><p className="eyebrow">MeetingTutor</p><h1>會議記錄、上課錄音助教</h1></div><div className="header-actions"><button className={config.apiKey && config.modelId ? 'settings-toggle is-ready' : 'settings-toggle'} type="button" onClick={() => setSettingsOpen(true)} aria-expanded={settingsOpen}><span>連接你的AI</span><small>{config.apiKey && config.modelId ? `${providerLabel(config.id)}｜${config.modelId}` : '尚未完成設定'}</small></button></div></div>{hardwareResult && <p className="hardware-result" role="status">{hardwareResult}</p>}</div>
+      {settingsOpen && <section className="ai-settings-panel" aria-label="連接你的AI">
+        <div className="settings-panel-heading"><div><h2>連接你的AI</h2><p>設定會保存在此瀏覽器；連線正常時，下次開啟可直接沿用。</p></div></div>
         <div className="provider-grid"><label className="field"><span>Provider</span><select value={config.id} onChange={(e) => updateProvider(e.target.value as ProviderId)} disabled={busy}>{PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label><label className="field"><span>API Key（保存在本機瀏覽器）</span><div className="key-input"><input type={showKey ? 'text' : 'password'} value={config.apiKey} onChange={(e) => updateApiKey(e.target.value)} autoComplete="off" placeholder="貼上你的 Key" disabled={busy} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? '隱藏' : '顯示'}</button><button type="button" onClick={clearApiKeys} disabled={busy}>清除 API Key</button></div></label><label className="field"><span>API Base URL</span><input value={config.baseUrl ?? ''} onChange={(e) => updateBaseUrl(e.target.value)} disabled={busy} /></label>{config.id === 'cgu' && <label className="field"><span>CGU 推理程度（預設：中）</span><select value={config.reasoningEffort ?? 'medium'} onChange={(e) => setConfig((current) => ({ ...current, reasoningEffort: e.target.value as ReasoningEffort }))} disabled={busy}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>}</div>
         <p className="hint">{PROVIDERS.find((provider) => provider.id === config.id)?.hint}</p><button className="secondary" onClick={testProvider} disabled={busy || !config.apiKey}>{busy ? '測試中…' : config.modelId ? '重新測試並更新模型' : '測試 Key 並讀取模型'}</button>{modelTestStatus === 'available' && <p className="model-available" role="status">模型可用（已讀取 {models.length} 個），設定已自動保存。</p>}{modelTestStatus === 'empty' && <p className="model-unavailable" role="status">測試成功，但沒有可列舉的模型。</p>}{modelTestStatus === 'error' && <p className="model-unavailable" role="alert">模型呼叫失敗，請檢查 Key、Base URL、模型或服務狀態。</p>}{config.modelId && !models.length && modelTestStatus !== 'error' && <p className="stored-model">已保存模型：{config.modelId}</p>}{models.length > 0 && <label className="field model-select"><span>選擇模型</span><select value={config.modelId ?? ''} onChange={(e) => setConfig({ ...config, modelId: e.target.value })}>{models.map((model) => <option key={model.id} value={model.id}>{model.displayName}（{model.id}）</option>)}</select></label>}
-        <div className="settings-close-row"><button type="button" onClick={() => setSettingsOpen(false)}>關閉 AI 設定</button></div>
+        <div className="settings-close-row"><button type="button" onClick={() => setSettingsOpen(false)}>關閉連接你的AI</button></div>
       </section>}
     </header>
 
     <main className="workspace">
-      <section className="panel"><div className="section-heading"><span className="step">1</span><div><h2>上傳逐字稿</h2><p>建議使用 Teams 產生字幕，再上傳至本系統進行摘要與統整。</p></div><button className={testPreviewOpen ? 'test-preview-toggle is-active' : 'test-preview-toggle'} type="button" onClick={() => setTestPreviewOpen((current) => !current)} aria-expanded={testPreviewOpen}>測試離線轉寫</button></div>
-        {testPreviewOpen && <section className="test-preview-panel" aria-label="測試離線轉寫">
-          <div className="test-preview-heading"><div><h2>測試離線轉寫</h2><p>需要測試瀏覽器端語音轉錄時，再從這裡上傳音訊或開始錄音。</p></div><button type="button" onClick={() => setTestPreviewOpen(false)}>關閉</button></div>
+      <section className="panel"><div className="section-heading"><span className="step">1</span><div><h2>上傳逐字稿</h2><p>建議使用 Teams 產生字幕，再上傳至本系統進行摘要與統整。</p></div><button className={testPreviewOpen ? 'test-preview-toggle is-active' : 'test-preview-toggle'} type="button" onClick={() => setTestPreviewOpen((current) => !current)} aria-expanded={testPreviewOpen}>離線轉寫 (Beta)</button></div>
+        {testPreviewOpen && <section className="test-preview-panel" aria-label="離線轉寫 (Beta)">
+          <div className="test-preview-heading"><div><h2>離線轉寫 (Beta)</h2><p>需要測試瀏覽器端語音轉錄時，再從這裡上傳音訊或開始錄音。</p></div><button type="button" onClick={() => setTestPreviewOpen(false)}>關閉</button></div>
           <div className="test-preview-notice" role="note"><strong>建議先使用 Teams 產生字幕</strong><p>目前的語音模型僅在您的瀏覽器中執行，辨識精確度仍有限。此離線轉寫只適合發音較準確、背景雜訊少且較短的錄音檔案；建議先使用 Teams 錄音產生字幕，再將字幕上傳至本系統進行摘要與統整。</p></div>
           <div className="test-preview-hardware"><p className="hardware-note">最低硬體建議：四核心現代處理器、8 GB RAM、至少 2 GB 可用空間；建議使用最新版 Chrome、Edge 或 Firefox，WebGPU 可用時速度較佳。</p><button className="hardware-button" onClick={checkHardware}>檢測我的硬體</button></div>
           <div className="controls-row"><label className="field"><span>轉寫語言</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} disabled={busy}><option value="zh">中文（繁體／多語模型）</option><option value="en">English（英文模型）</option></select></label><label className="field"><span>Whisper 模型</span><select value={whisperModel} onChange={(event) => setWhisperModel(event.target.value as 'tiny' | 'base' | 'medium')} disabled={busy}><option value="medium">Whisper-medium（最準確、需要較多記憶體）</option><option value="base">Whisper-base（預設，較準確）</option><option value="tiny">Whisper-tiny（較快、較省資源）</option></select></label><label className="file-picker"><span>選擇音訊</span><input type="file" accept="audio/*,video/*" onChange={onAudioChange} disabled={busy} /></label><button className="secondary" onClick={recording ? stopRecording : startRecording} disabled={busy}>{recording ? '停止錄音' : '開始錄音'}</button></div>
