@@ -1,14 +1,27 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import './styles.css'
-import type { GenerationResult, GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReferenceDocument, TranscriptSegment } from './types'
+import type { GenerationResult, GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, ReferenceDocument, TranscriptSegment } from './types'
 import { PROVIDERS, generateText, listModels, providerLabel } from './lib/providers'
 import { readReference } from './lib/references'
 import { createPrompt, localOutputs, renderA4Html } from './lib/outputs'
 import { transcribe } from './lib/transcription'
+import { parseTeamsTranscript } from './lib/transcript'
 
 const defaultProvider: ProviderId = 'openai'
 const initialConfig: ProviderConfig = { id: defaultProvider, apiKey: '', baseUrl: PROVIDERS[0].defaultBaseUrl }
+const API_KEYS_STORAGE_KEY = 'meetingtutor.api-keys.v1'
+
+function storedApiKeys(): Partial<Record<ProviderId, string>> {
+  try {
+    const raw = window.localStorage.getItem(API_KEYS_STORAGE_KEY)
+    return raw ? JSON.parse(raw) as Partial<Record<ProviderId, string>> : {}
+  } catch { return {} }
+}
+
+function storedApiKey(provider: ProviderId) {
+  return storedApiKeys()[provider] ?? ''
+}
 
 function download(name: string, content: string, type = 'text/plain;charset=utf-8') {
   const url = URL.createObjectURL(new Blob([content], { type }))
@@ -27,6 +40,7 @@ function formatSeconds(seconds: number) {
 
 type CorrectionDecision = 'keep' | 'accept' | 'custom'
 type ModelOutputBase = { notice: string; minutes: string; actions: string; agenda: string; source: string }
+type ModelTestStatus = 'idle' | 'testing' | 'available' | 'empty' | 'error'
 
 function applyCorrectionChoices(result: GenerationResult, decisions: Record<number, CorrectionDecision>, customValues: Record<number, string>) {
   return result.changes.reduce((text, change, index) => {
@@ -40,14 +54,17 @@ export default function App() {
   const [language, setLanguage] = useState<Language>('zh')
   const [whisperModel, setWhisperModel] = useState<'tiny' | 'base'>('base')
   const [audioFile, setAudioFile] = useState<File | null>(null)
+  const [transcriptFile, setTranscriptFile] = useState<File | null>(null)
+  const [uploadedTranscriptSegments, setUploadedTranscriptSegments] = useState<TranscriptSegment[]>([])
   const [recording, setRecording] = useState(false)
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
   const [segments, setSegments] = useState<TranscriptSegment[]>([])
   const [references, setReferences] = useState<ReferenceDocument[]>([])
   const [glossary, setGlossary] = useState<GlossaryTerm[]>([])
   const [newTermText, setNewTermText] = useState('')
-  const [config, setConfig] = useState<ProviderConfig>(initialConfig)
+  const [config, setConfig] = useState<ProviderConfig>(() => ({ ...initialConfig, apiKey: storedApiKey(defaultProvider) }))
   const [models, setModels] = useState<ModelInfo[]>([])
+  const [modelTestStatus, setModelTestStatus] = useState<ModelTestStatus>('idle')
   const [status, setStatus] = useState('請選擇音訊檔或開始錄音。')
   const [busy, setBusy] = useState(false)
   const [output, setOutput] = useState<MeetingOutput | null>(null)
@@ -57,6 +74,14 @@ export default function App() {
   const [customCorrections, setCustomCorrections] = useState<Record<number, string>>({})
   const [hardwareResult, setHardwareResult] = useState<string | null>(null)
   const [showKey, setShowKey] = useState(false)
+
+  useEffect(() => {
+    try {
+      const keys = storedApiKeys()
+      keys[config.id] = config.apiKey
+      window.localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(keys))
+    } catch { /* Private browsing or blocked storage: keep the key in memory only. */ }
+  }, [config.id, config.apiKey])
 
   const transcriptText = useMemo(() => segments.map((segment) => segment.text).join(' '), [segments])
   const approvedCorrectionText = useMemo(() => correctionResult ? applyCorrectionChoices(correctionResult, correctionDecisions, customCorrections) : '', [correctionResult, correctionDecisions, customCorrections])
@@ -83,17 +108,55 @@ export default function App() {
 
   const updateProvider = (id: ProviderId) => {
     const provider = PROVIDERS.find((item) => item.id === id)!
-    setConfig({ id, apiKey: '', baseUrl: provider.defaultBaseUrl, modelId: undefined })
+    setConfig({ id, apiKey: storedApiKey(id), baseUrl: provider.defaultBaseUrl, modelId: undefined, reasoningEffort: id === 'cgu' ? 'medium' : undefined })
     setModels([])
+    setModelTestStatus('idle')
+  }
+
+  const updateApiKey = (apiKey: string) => {
+    setConfig((current) => ({ ...current, apiKey, modelId: undefined }))
+    setModels([])
+    setModelTestStatus('idle')
+  }
+
+  const updateBaseUrl = (baseUrl: string) => {
+    setConfig((current) => ({ ...current, baseUrl, modelId: undefined }))
+    setModels([])
+    setModelTestStatus('idle')
   }
 
   const onAudioChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setAudioFile(event.target.files?.[0] ?? null)
-    setStatus(event.target.files?.[0] ? `已選擇：${event.target.files[0].name}` : '請選擇音訊檔或開始錄音。')
+    const file = event.target.files?.[0] ?? null
+    setAudioFile(file)
+    if (file) {
+      setTranscriptFile(null)
+      setUploadedTranscriptSegments([])
+    }
+    setStatus(file ? `已選擇：${file.name}` : '請選擇音訊檔或開始錄音。')
+  }
+
+  const onTranscriptChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null
+    setTranscriptFile(file)
+    setUploadedTranscriptSegments([])
+    if (!file) return
+    setAudioFile(null)
+    setBusy(true)
+    try {
+      const parsed = parseTeamsTranscript(await file.text())
+      if (!parsed.length) throw new Error('找不到可辨識的逐字稿內容。')
+      setUploadedTranscriptSegments(parsed)
+      setStatus(`已解析 Teams 逐字稿：${file.name}，共 ${parsed.length} 段；按下「載入逐字稿」後開始使用。`)
+    } catch (error) {
+      setTranscriptFile(null)
+      setStatus(`逐字稿解析失敗：${error instanceof Error ? error.message : String(error)}`)
+    } finally { setBusy(false) }
   }
 
   const startRecording = async () => {
     try {
+      setTranscriptFile(null)
+      setUploadedTranscriptSegments([])
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const recorder = new MediaRecorder(stream)
       const chunks: Blob[] = []
@@ -119,7 +182,12 @@ export default function App() {
   }
 
   const runTranscription = async () => {
-    if (!audioFile) return setStatus('請先選擇音訊檔或完成錄音。')
+    if (uploadedTranscriptSegments.length) {
+      setSegments(uploadedTranscriptSegments)
+      setStatus(`已載入逐字稿，共 ${uploadedTranscriptSegments.length} 個段落。`)
+      return
+    }
+    if (!audioFile) return setStatus('請先選擇音訊檔、完成錄音，或上傳 Teams 逐字稿。')
     setBusy(true)
     try {
       const result = await transcribe(audioFile, language, whisperModel, (progress) => {
@@ -153,16 +221,27 @@ export default function App() {
 
   const testProvider = async () => {
     setBusy(true)
+    setModelTestStatus('testing')
     setStatus(`正在測試 ${providerLabel(config.id)} 並讀取模型…`)
     try {
       const result = await listModels(config)
       setModels(result)
       setConfig((current) => ({ ...current, modelId: result[0]?.id }))
-      setStatus(result.length ? `測試成功，可用模型 ${result.length} 個。` : '測試成功，但 provider 沒有回傳可列舉的模型。')
+      setModelTestStatus(result.length ? 'available' : 'empty')
+      setStatus(result.length ? `模型可用：已讀取 ${result.length} 個模型。${config.id === 'cgu' && /luna/i.test(`${result[0].id} ${result[0].displayName}`) ? `預設選擇最新 Luna：${result[0].displayName}` : ''}` : '測試成功，但 provider 沒有回傳可列舉的模型。')
     } catch (error) {
       setModels([])
-      setStatus(`Provider 測試失敗：${error instanceof Error ? error.message : String(error)}（Key 未被保存）`)
+      setModelTestStatus('error')
+      setStatus(`Provider 測試失敗：${error instanceof Error ? error.message : String(error)}；請檢查 Key、Base URL、CORS 或服務狀態。`)
     } finally { setBusy(false) }
+  }
+
+  const clearApiKeys = () => {
+    try { window.localStorage.removeItem(API_KEYS_STORAGE_KEY) } catch { /* Keep going if storage is unavailable. */ }
+    setConfig((current) => ({ ...current, apiKey: '', modelId: undefined }))
+    setModels([])
+    setModelTestStatus('idle')
+    setStatus('已清除瀏覽器中保存的 API Key。')
   }
 
   const addTerm = () => {
@@ -224,8 +303,11 @@ export default function App() {
     <main className="workspace">
       <section className="panel"><div className="section-heading"><span className="step">1</span><div><h2>取得音訊</h2><p>轉寫語言預設為中文，也可選擇英文。</p></div></div>
         <div className="controls-row"><label className="field"><span>轉寫語言</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} disabled={busy}><option value="zh">中文（繁體／多語模型）</option><option value="en">English（英文模型）</option></select></label><label className="field"><span>Whisper 模型</span><select value={whisperModel} onChange={(event) => setWhisperModel(event.target.value as 'tiny' | 'base')} disabled={busy}><option value="base">Whisper-base（預設，較準確）</option><option value="tiny">Whisper-tiny（較快、較省資源）</option></select></label><label className="file-picker"><span>選擇音訊</span><input type="file" accept="audio/*,video/*" onChange={onAudioChange} disabled={busy} /></label><button className="secondary" onClick={recording ? stopRecording : startRecording} disabled={busy}>{recording ? '停止錄音' : '開始錄音'}</button></div>
+        <div className="controls-row transcript-upload-row"><label className="file-picker wide"><span>或上傳 Teams 逐字稿（.vtt／.txt／.srt）</span><input type="file" accept=".vtt,.txt,.srt,text/vtt,text/plain" onChange={onTranscriptChange} disabled={busy} /></label></div>
         {audioFile && <p className="file-note">已準備：{audioFile.name}（{Math.round(audioFile.size / 1024)} KB）</p>}
-        <button className="primary" onClick={runTranscription} disabled={busy || !audioFile}>{busy ? '處理中…' : '開始轉錄'}</button>
+        {transcriptFile && <p className="file-note">已準備 Teams 逐字稿：{transcriptFile.name}（{uploadedTranscriptSegments.length} 段）</p>}
+        <p className="hint">Whisper 模型首次下載後會保存於此瀏覽器快取；之後相同模型可直接重用。</p>
+        <button className="primary" onClick={runTranscription} disabled={busy || (!audioFile && !transcriptFile)}>{busy ? '處理中…' : transcriptFile && !audioFile ? '載入逐字稿' : '開始轉錄／載入逐字稿'}</button>
         <p className="status" role="status">{status}</p>
       </section>
 
@@ -238,8 +320,8 @@ export default function App() {
       <section className="panel"><div className="section-heading"><span className="step">3</span><div><h2>參考資料（可跳過，但建議）</h2><p>加入 PDF、TXT 或 Markdown，協助校正專有名詞與姓名。</p></div></div><label className="file-picker wide"><span>加入參考檔案</span><input type="file" accept="application/pdf,text/plain,text/markdown,.md,.txt" multiple onChange={addReferences} disabled={busy} /></label>{references.length > 0 && <ul className="reference-list">{references.map((reference) => <li key={reference.id}><span>{reference.name}</span><small>{reference.type === 'pdf' ? `${reference.pages} 頁` : `${reference.text.length.toLocaleString()} 字`}</small><button onClick={() => setReferences((current) => current.filter((item) => item.id !== reference.id))}>移除</button></li>)}</ul>}<p className="hint">掃描型 PDF 沒有文字層時，系統會提示需要 OCR，不會假裝讀取成功。</p></section>
 
       <section className="panel"><div className="section-heading"><span className="step">4</span><div><h2>連接你的模型</h2><p>Key 只在目前工作階段使用；測試成功後才會顯示模型。</p></div></div>
-        <div className="provider-grid"><label className="field"><span>Provider</span><select value={config.id} onChange={(e) => updateProvider(e.target.value as ProviderId)} disabled={busy}>{PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label><label className="field"><span>API Key（不會保存）</span><div className="key-input"><input type={showKey ? 'text' : 'password'} value={config.apiKey} onChange={(e) => setConfig({ ...config, apiKey: e.target.value })} autoComplete="off" placeholder="貼上你的 Key" disabled={busy} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? '隱藏' : '顯示'}</button></div></label><label className="field"><span>API Base URL</span><input value={config.baseUrl ?? ''} onChange={(e) => setConfig({ ...config, baseUrl: e.target.value })} disabled={busy} /></label></div>
-        <p className="hint">{PROVIDERS.find((provider) => provider.id === config.id)?.hint}</p><button className="secondary" onClick={testProvider} disabled={busy || !config.apiKey}>{busy ? '測試中…' : '測試 Key 並讀取模型'}</button>{models.length > 0 && <label className="field model-select"><span>選擇模型</span><select value={config.modelId ?? ''} onChange={(e) => setConfig({ ...config, modelId: e.target.value })}>{models.map((model) => <option key={model.id} value={model.id}>{model.displayName}（{model.id}）</option>)}</select></label>}
+        <div className="provider-grid"><label className="field"><span>Provider</span><select value={config.id} onChange={(e) => updateProvider(e.target.value as ProviderId)} disabled={busy}>{PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label><label className="field"><span>API Key（保存在本機瀏覽器）</span><div className="key-input"><input type={showKey ? 'text' : 'password'} value={config.apiKey} onChange={(e) => updateApiKey(e.target.value)} autoComplete="off" placeholder="貼上你的 Key" disabled={busy} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? '隱藏' : '顯示'}</button><button type="button" onClick={clearApiKeys} disabled={busy}>清除 API Key</button></div></label><label className="field"><span>API Base URL</span><input value={config.baseUrl ?? ''} onChange={(e) => updateBaseUrl(e.target.value)} disabled={busy} /></label>{config.id === 'cgu' && <label className="field"><span>CGU 推理程度（預設：中）</span><select value={config.reasoningEffort ?? 'medium'} onChange={(e) => setConfig((current) => ({ ...current, reasoningEffort: e.target.value as ReasoningEffort }))} disabled={busy}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>}</div>
+        <p className="hint">{PROVIDERS.find((provider) => provider.id === config.id)?.hint}</p><button className="secondary" onClick={testProvider} disabled={busy || !config.apiKey}>{busy ? '測試中…' : '測試 Key 並讀取模型'}</button>{modelTestStatus === 'available' && <p className="model-available" role="status">模型可用（已讀取 {models.length} 個）</p>}{modelTestStatus === 'empty' && <p className="model-unavailable" role="status">測試成功，但沒有可列舉的模型。</p>}{models.length > 0 && <label className="field model-select"><span>選擇模型</span><select value={config.modelId ?? ''} onChange={(e) => setConfig({ ...config, modelId: e.target.value })}>{models.map((model) => <option key={model.id} value={model.id}>{model.displayName}（{model.id}）</option>)}</select></label>}
       </section>
 
       <section className="panel output-panel"><div className="section-heading"><span className="step">5</span><div><h2>產生會議成果</h2><p>先產生草稿，再人工核對；產品不會自動寄信或建立行事曆。</p></div></div><div className="controls-row"><button className="primary" onClick={() => generate(true)} disabled={busy || !segments.length || !config.modelId}>使用選定模型整理</button><button className="secondary" onClick={() => generate(false)} disabled={busy || !segments.length}>只建立本地結構草稿</button></div>{correctionResult && <div className="correction-review"><h3>文字校正確認</h3><p className="hint">紅色文字是模型建議的編修詞。預設為「同意編修」；請逐項選擇後再套用到匯出草稿。</p>{correctionResult.changes.length ? <div className="correction-list">{correctionResult.changes.map((change, index) => <div className="correction-item" key={`${change.from}-${change.to}-${index}`}><div className="correction-text"><span>原文：{change.from}</span><span>建議：<mark className="correction-red">{change.to}</mark></span><small>{change.reason}（信心：{change.confidence}）</small></div><select value={correctionDecisions[index] ?? 'accept'} onChange={(event) => setCorrectionDecisions((current) => ({ ...current, [index]: event.target.value as CorrectionDecision }))}><option value="keep">維持原文</option><option value="accept">同意編修</option><option value="custom">自己輸入</option></select>{correctionDecisions[index] === 'custom' && <input className="custom-correction" value={customCorrections[index] ?? ''} placeholder="輸入要使用的文字" onChange={(event) => setCustomCorrections((current) => ({ ...current, [index]: event.target.value }))} />}</div>)}</div> : <p className="empty">模型沒有回傳可辨識的編修詞。</p>}<div className="approved-preview"><strong>核准後文字預覽</strong><p>{approvedCorrectionText || correctionResult.revisedText}</p></div><button className="secondary" onClick={applyCorrectionsToOutput} disabled={!output || !correctionResult}>套用文字校正到匯出草稿</button></div>}{output && <div className="output-actions"><button onClick={() => download('01_會後通知信.md', output.notice)}>下載通知信</button><button onClick={() => download('02_完整會議紀錄.md', output.minutes)}>下載完整紀錄</button><button onClick={() => download('03_本次待辦事項.md', output.actions)}>下載待辦</button><button onClick={() => download('04_下次會議議程.md', output.agenda)}>下載議程</button><button onClick={() => download('05_會議成果彙整_A4列印.html', output.a4Html, 'text/html;charset=utf-8')}>下載 A4 HTML</button></div>}{output && <details className="preview"><summary>預覽通知信草稿</summary><pre>{output.notice}</pre></details>}</section>

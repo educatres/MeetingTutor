@@ -1,6 +1,7 @@
 export type Language = 'zh' | 'en'
 
 export type ProviderId = 'openai' | 'xai' | 'google' | 'cgu'
+export type ReasoningEffort = 'low' | 'medium' | 'high'
 
 export interface TranscriptSegment {
   id: string
@@ -33,6 +34,7 @@ export interface ModelInfo {
   displayName: string
   capabilities: string[]
   source: ProviderId
+  created?: number
 }
 
 export interface ProviderConfig {
@@ -40,6 +42,7 @@ export interface ProviderConfig {
   apiKey: string
   baseUrl?: string
   modelId?: string
+  reasoningEffort?: ReasoningEffort
 }
 
 export interface GenerationResult {

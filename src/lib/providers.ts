@@ -9,6 +9,64 @@ export const PROVIDERS: Array<{ id: ProviderId; label: string; defaultBaseUrl: s
 
 const cleanBaseUrl = (value: string) => value.replace(/\/$/, '')
 
+function parseTimestamp(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    // OpenAI-compatible APIs commonly return Unix seconds; normalize to ms.
+    return value < 10_000_000_000 ? value * 1000 : value
+  }
+  if (typeof value === 'string') {
+    const numeric = Number(value)
+    if (Number.isFinite(numeric) && value.trim() !== '') return parseTimestamp(numeric)
+    const parsed = Date.parse(value)
+    return Number.isNaN(parsed) ? undefined : parsed
+  }
+  return undefined
+}
+
+function modelTimestamp(model: any): number | undefined {
+  for (const key of ['updated', 'updated_at', 'updatedAt', 'updateTime', 'created', 'created_at', 'createdAt', 'createTime']) {
+    const parsed = parseTimestamp(model?.[key])
+    if (parsed !== undefined) return parsed
+  }
+  return undefined
+}
+
+function lunaVersion(model: ModelInfo): number[] {
+  const label = `${model.id} ${model.displayName}`
+  const match = label.match(/luna[^0-9]*(\d+(?:\.\d+)*)/i)
+  if (!match) return []
+  return match[1].split('.').map((part) => Number(part))
+}
+
+function compareVersions(left: number[], right: number[]) {
+  const length = Math.max(left.length, right.length)
+  for (let index = 0; index < length; index += 1) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0)
+    if (difference !== 0) return difference
+  }
+  return 0
+}
+
+function sortModels(config: ProviderConfig, models: ModelInfo[]): ModelInfo[] {
+  if (config.id !== 'cgu') return models
+  return models
+    .map((model, index) => ({ model, index, luna: /luna/i.test(`${model.id} ${model.displayName}`) }))
+    .sort((left, right) => {
+      // CGU's Luna family is the preferred default. The API's timestamp (when
+      // supplied) wins; a semantic version then provides a useful fallback.
+      if (left.luna !== right.luna) return left.luna ? -1 : 1
+      if (left.luna && right.luna) {
+        const leftCreated = left.model.created ?? 0
+        const rightCreated = right.model.created ?? 0
+        if (leftCreated !== rightCreated) return rightCreated - leftCreated
+        const versionDifference = compareVersions(lunaVersion(right.model), lunaVersion(left.model))
+        if (versionDifference !== 0) return versionDifference
+      }
+      return left.index - right.index
+    })
+    .map(({ model }) => model)
+}
+
 async function request(url: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), 30_000)
@@ -43,20 +101,23 @@ export async function listModels(config: ProviderConfig): Promise<ModelInfo[]> {
   if (config.id === 'google') {
     const base = cleanBaseUrl(config.baseUrl || 'https://generativelanguage.googleapis.com/v1beta')
     const body = await responseJson(await request(`${base}/models?key=${encodeURIComponent(config.apiKey)}`, { method: 'GET' }))
-    return (body.models ?? []).filter((model: any) => (model.supportedGenerationMethods ?? []).includes('generateContent')).map((model: any) => ({
+    const models = (body.models ?? []).filter((model: any) => (model.supportedGenerationMethods ?? []).includes('generateContent')).map((model: any) => ({
       id: String(model.name ?? '').replace(/^models\//, ''),
       displayName: model.displayName || model.name,
       capabilities: ['text-generation'],
       source: 'google' as const,
+      created: modelTimestamp(model),
     }))
+    return sortModels(config, models)
   }
   const base = cleanBaseUrl(config.baseUrl || PROVIDERS.find((p) => p.id === config.id)?.defaultBaseUrl || '')
   const body = await responseJson(await request(`${base}/models`, { method: 'GET', headers: authHeaders(config.apiKey) }))
   const rows = Array.isArray(body) ? body : body.data ?? body.models ?? []
-  return rows.map((model: any) => {
+  const models = rows.map((model: any) => {
     const id = String(model.id ?? model.name ?? '')
-    return { id: id.replace(/^models\//, ''), displayName: model.displayName || id, capabilities: ['text-generation'], source: config.id }
+    return { id: id.replace(/^models\//, ''), displayName: model.displayName || id, capabilities: ['text-generation'], source: config.id, created: modelTimestamp(model) }
   }).filter((model: ModelInfo) => model.id)
+  return sortModels(config, models)
 }
 
 function parseJsonResult(text: string): GenerationResult {
@@ -91,8 +152,10 @@ export async function generateText(config: ProviderConfig, prompt: string): Prom
     throw new Error('CGU endpoint 未設定，因此未送出資料。')
   }
   const base = cleanBaseUrl(config.baseUrl || PROVIDERS.find((p) => p.id === config.id)?.defaultBaseUrl || '')
+  const requestBody: Record<string, unknown> = { model, temperature: 0.1, messages: [{ role: 'user', content: prompt }] }
+  if (config.id === 'cgu') requestBody.reasoning_effort = config.reasoningEffort ?? 'medium'
   const body = await responseJson(await request(`${base}/chat/completions`, {
-    method: 'POST', headers: authHeaders(config.apiKey), body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: 'user', content: prompt }] }),
+    method: 'POST', headers: authHeaders(config.apiKey), body: JSON.stringify(requestBody),
   }))
   const text = body.choices?.[0]?.message?.content || ''
   return parseJsonResult(text)

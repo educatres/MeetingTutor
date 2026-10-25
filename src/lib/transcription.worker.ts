@@ -1,4 +1,4 @@
-import { pipeline } from '@huggingface/transformers'
+import { env, pipeline } from '@huggingface/transformers'
 
 type WorkerScope = {
   onmessage: ((event: MessageEvent) => void) | null
@@ -6,6 +6,10 @@ type WorkerScope = {
 }
 
 const workerScope = globalThis as unknown as WorkerScope
+// Reuse model files through the browser Cache API between page loads.
+env.useBrowserCache = true
+env.allowRemoteModels = true
+env.allowLocalModels = false
 let currentModel = ''
 let currentTranscriber: ((audio: Float32Array, options: Record<string, unknown>) => Promise<any>) | null = null
 
