@@ -39,7 +39,7 @@ async function decodeAudio(file: Blob): Promise<Float32Array> {
   }
 }
 
-export async function transcribe(file: Blob, language: Language, size: 'tiny' | 'base', onProgress: (progress: Progress) => void): Promise<TranscriptSegment[]> {
+export async function transcribe(file: Blob, language: Language, size: 'tiny' | 'base', onProgress: (progress: Progress) => void, onSegments?: (segments: TranscriptSegment[]) => void): Promise<TranscriptSegment[]> {
   const audio = await decodeAudio(file)
   const model = modelForLanguage(language, size)
   const worker = getWorker()
@@ -72,11 +72,15 @@ export async function transcribe(file: Blob, language: Language, size: 'tiny' | 
   const chunks = Array.isArray(result?.chunks) ? result.chunks : []
   if (!chunks.length) {
     const text = String(result?.text ?? '').trim()
-    return text ? [{ id: crypto.randomUUID(), start: 0, end: 0, text, originalText: text }] : []
+    const segments = text ? [{ id: crypto.randomUUID(), start: 0, end: 0, text, originalText: text }] : []
+    onSegments?.(segments)
+    return segments
   }
-  return chunks.map((chunk: any, index: number) => {
+  const segments = chunks.map((chunk: any, index: number) => {
     const timestamp = Array.isArray(chunk.timestamp) ? chunk.timestamp : [0, 0]
     const text = String(chunk.text ?? '').trim()
     return { id: crypto.randomUUID?.() ?? `segment-${index}`, start: Number(timestamp[0] ?? 0), end: Number(timestamp[1] ?? timestamp[0] ?? 0), text, originalText: text }
   }).filter((segment: TranscriptSegment) => segment.text)
+  onSegments?.(segments)
+  return segments
 }

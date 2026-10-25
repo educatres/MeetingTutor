@@ -43,14 +43,15 @@ button { cursor: pointer; }
 .secondary { background: #e8f0f3; color: #1e526b; border: 1px solid #c5d8e1; }
 .file-note, .hint, .status { font-size: 13px; color: #5d6e78; margin: 12px 0; }
 .status { padding: 10px; border-radius: 7px; background: #f1f5f6; min-height: 40px; }
-.transcription-progress { margin: 14px 0 0; padding: 12px; border: 1px solid #c8dce5; border-radius: 8px; background: #f7fbfc; }
-.progress-meta { display: flex; justify-content: space-between; gap: 12px; color: #285268; font-size: 13px; }
-.progress-meta strong { color: #1e6381; }
-.progress-track { height: 10px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: #dce8ed; }
-.progress-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2d88a5, #55b8a4); transition: width .25s ease; }
-.transcription-progress.is-indeterminate .progress-fill { animation: transcription-progress-slide 1.35s ease-in-out infinite; }
-.progress-hint { margin: 8px 0 0; color: #637782; font-size: 12px; }
-@keyframes transcription-progress-slide { 0% { transform: translateX(-110%); } 50% { transform: translateX(165%); } 100% { transform: translateX(280%); } }
+.live-transcript { margin-top: 14px; border: 1px solid #c8dce5; border-radius: 8px; background: #f7fbfc; }
+.live-transcript-heading { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; color: #285268; font-size: 13px; }
+.live-transcript-heading strong { color: #1e6381; }
+.live-transcript-heading span { color: #637782; }
+.live-transcript-box { height: 360px; max-height: 360px; overflow-y: auto; border-top: 1px solid #dce8ed; }
+.live-segment { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border-bottom: 1px solid #e1ebef; color: #253640; line-height: 1.5; }
+.live-segment:last-child { border-bottom: 0; }
+.live-segment .timestamp { flex: none; min-width: 46px; padding-top: 0; }
+.live-transcript-box .empty { margin: 0; padding: 28px 14px; }
 .model-available, .model-unavailable { display: inline-block; margin: 12px 0 0 10px; padding: 8px 10px; border-radius: 7px; font-size: 13px; font-weight: 700; }
 .model-available { color: #17633b; background: #e8f6ee; border: 1px solid #a9dbbc; }
 .model-unavailable { color: #805c13; background: #fff8e5; border: 1px solid #e4c979; }

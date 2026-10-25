@@ -41,7 +41,6 @@ function formatSeconds(seconds: number) {
 type CorrectionDecision = 'keep' | 'accept' | 'custom'
 type ModelOutputBase = { notice: string; minutes: string; actions: string; agenda: string; source: string }
 type ModelTestStatus = 'idle' | 'testing' | 'available' | 'empty' | 'error'
-type TranscriptionProgressState = { phase: 'model' | 'transcribing' | 'complete'; value: number; indeterminate: boolean }
 
 function applyCorrectionChoices(result: GenerationResult, decisions: Record<number, CorrectionDecision>, customValues: Record<number, string>) {
   return result.changes.reduce((text, change, index) => {
@@ -66,7 +65,6 @@ export default function App() {
   const [config, setConfig] = useState<ProviderConfig>(() => ({ ...initialConfig, apiKey: storedApiKey(defaultProvider) }))
   const [models, setModels] = useState<ModelInfo[]>([])
   const [modelTestStatus, setModelTestStatus] = useState<ModelTestStatus>('idle')
-  const [transcriptionProgress, setTranscriptionProgress] = useState<TranscriptionProgressState | null>(null)
   const [status, setStatus] = useState('請選擇音訊檔或開始錄音。')
   const [busy, setBusy] = useState(false)
   const [output, setOutput] = useState<MeetingOutput | null>(null)
@@ -131,7 +129,7 @@ export default function App() {
   const onAudioChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null
     setAudioFile(file)
-    setTranscriptionProgress(null)
+    setSegments([])
     if (file) {
       setTranscriptFile(null)
       setUploadedTranscriptSegments([])
@@ -141,9 +139,9 @@ export default function App() {
 
   const onTranscriptChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null
-    setTranscriptionProgress(null)
     setTranscriptFile(file)
     setUploadedTranscriptSegments([])
+    setSegments([])
     if (!file) return
     setAudioFile(null)
     setBusy(true)
@@ -162,7 +160,7 @@ export default function App() {
     try {
       setTranscriptFile(null)
       setUploadedTranscriptSegments([])
-      setTranscriptionProgress(null)
+      setSegments([])
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const recorder = new MediaRecorder(stream)
       const chunks: Blob[] = []
@@ -190,28 +188,23 @@ export default function App() {
   const runTranscription = async () => {
     if (uploadedTranscriptSegments.length) {
       setSegments(uploadedTranscriptSegments)
-      setTranscriptionProgress(null)
       setStatus(`已載入逐字稿，共 ${uploadedTranscriptSegments.length} 個段落。`)
       return
     }
     if (!audioFile) return setStatus('請先選擇音訊檔、完成錄音，或上傳 Teams 逐字稿。')
     setBusy(true)
-    setTranscriptionProgress({ phase: 'model', value: 0, indeterminate: true })
     setStatus('正在讀取音訊並準備模型…')
     try {
       const result = await transcribe(audioFile, language, whisperModel, (progress) => {
         const phase = progress.phase ?? (progress.status?.includes('辨識') ? 'transcribing' : 'model')
         const hasProgress = typeof progress.progress === 'number' && Number.isFinite(progress.progress)
         const value = hasProgress ? Math.min(100, Math.max(0, progress.progress ?? 0)) : 0
-        setTranscriptionProgress({ phase, value, indeterminate: progress.indeterminate ?? !hasProgress })
         const percent = !progress.indeterminate && hasProgress ? ` ${Math.round(value)}%` : ''
         setStatus(`${progress.status ?? '處理中…'}${percent}`)
-      })
+      }, (partialSegments) => setSegments(partialSegments))
       setSegments(result)
-      setTranscriptionProgress({ phase: 'complete', value: 100, indeterminate: false })
       setStatus(`完成轉錄，共 ${result.length} 個段落。`)
     } catch (error) {
-      setTranscriptionProgress(null)
       const message = error instanceof Error ? error.message : String(error)
       setStatus(message.toLowerCase().includes('fetch')
         ? '轉錄失敗：無法下載 Whisper 模型檔（Failed to fetch）。請確認網路連線、重新整理頁面，或先改用 Whisper-tiny。'
@@ -315,7 +308,7 @@ export default function App() {
         {transcriptFile && <p className="file-note">已準備 Teams 逐字稿：{transcriptFile.name}（{uploadedTranscriptSegments.length} 段）</p>}
         <p className="hint">Whisper 模型首次下載後會保存於此瀏覽器快取；之後相同模型可直接重用。</p>
         <button className="primary" onClick={runTranscription} disabled={busy || (!audioFile && !transcriptFile)}>{busy ? '處理中…' : transcriptFile && !audioFile ? '載入逐字稿' : '開始轉錄／載入逐字稿'}</button>
-        {transcriptionProgress && <div className={`transcription-progress${transcriptionProgress.indeterminate ? ' is-indeterminate' : ''}`} aria-live="polite"><div className="progress-meta"><span>{transcriptionProgress.phase === 'model' ? '模型載入進度' : transcriptionProgress.phase === 'transcribing' ? '語音辨識進度' : '轉錄進度'}</span><strong>{transcriptionProgress.indeterminate ? '處理中…' : `${Math.round(transcriptionProgress.value)}%`}</strong></div><div className="progress-track" role="progressbar" aria-label="轉錄進度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={transcriptionProgress.indeterminate ? undefined : transcriptionProgress.value}><div className="progress-fill" style={{ width: transcriptionProgress.indeterminate ? '38%' : `${transcriptionProgress.value}%` }} /></div>{transcriptionProgress.phase === 'transcribing' && transcriptionProgress.indeterminate && <p className="progress-hint">語音辨識階段沒有可靠的即時百分比，動畫表示仍在處理中。</p>}</div>}
+        <div className="live-transcript" aria-live="polite"><div className="live-transcript-heading"><strong>逐句轉錄結果</strong><span>{segments.length ? `目前 ${segments.length} 句` : '完成辨識後會顯示在這裡'}</span></div><div className="live-transcript-box">{segments.length ? segments.map((segment) => <div className="live-segment" key={segment.id}><span className="timestamp">{formatSeconds(segment.start)}</span><span>{segment.text}</span></div>) : <p className="empty">尚未取得轉錄句子。</p>}</div></div>
         <p className="status" role="status">{status}</p>
       </section>
 
