@@ -27,7 +27,7 @@ async function getTranscriber(model: string) {
             : progress.status === 'done'
               ? `模型檔下載完成：${progress.file ?? ''}`
               : progress.status
-        workerScope.postMessage({ status: 'progress', data: { ...progress, status } })
+        workerScope.postMessage({ status: 'progress', data: { ...progress, status, phase: 'model', indeterminate: typeof progress.progress !== 'number' } })
       },
     }) as unknown as (audio: Float32Array, options: Record<string, unknown>) => Promise<any>
   }

@@ -1,6 +1,6 @@
 import type { Language, TranscriptSegment } from '../types'
 
-type Progress = { status?: string; progress?: number; file?: string }
+type Progress = { status?: string; progress?: number; file?: string; phase?: 'model' | 'transcribing'; indeterminate?: boolean }
 type WorkerResponse =
   | { status: 'progress'; data: Progress }
   | { status: 'ready' }
@@ -43,7 +43,7 @@ export async function transcribe(file: Blob, language: Language, size: 'tiny' | 
   const audio = await decodeAudio(file)
   const model = modelForLanguage(language, size)
   const worker = getWorker()
-  onProgress({ status: `正在準備 ${model}（瀏覽器背景執行緒）…`, progress: 0 })
+  onProgress({ status: `正在準備 ${model}（瀏覽器背景執行緒）…`, progress: 0, phase: 'model', indeterminate: true })
 
   const result = await new Promise<{ text?: string; chunks?: Array<{ text?: string; timestamp?: [number, number] }> }>((resolve, reject) => {
     worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
@@ -51,7 +51,11 @@ export async function transcribe(file: Blob, language: Language, size: 'tiny' | 
       if (message.status === 'progress') {
         onProgress(message.data)
       } else if (message.status === 'ready') {
-        onProgress({ status: '正在辨識語音…', progress: 0 })
+        // Transformers.js reports model-loading progress, but inference itself
+        // does not expose a reliable percentage. Use an indeterminate bar so
+        // the UI communicates that work is still progressing instead of being
+        // stuck at a misleading 0%.
+        onProgress({ status: '正在辨識語音…', progress: 0, phase: 'transcribing', indeterminate: true })
       } else if (message.status === 'complete') {
         resolve(message.data)
       } else if (message.status === 'error') {
