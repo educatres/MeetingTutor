@@ -13,3 +13,15 @@
 
 本機開發：`npm install` → `npm run dev`；發布建置：`npm run build`。GitHub Actions 已設定為推送 `main` 後部署 GitHub Pages。
 
+## GitHub Pages 一次性設定
+
+到 repository 的 **Settings → Pages → Build and deployment → Source** 選擇 **GitHub Actions**，再重新推送或在 Actions 手動執行 `Deploy to GitHub Pages`。目前若尚未啟用 Pages，workflow 的 `Configure Pages` 會失敗，但前面的依賴安裝與 production build 仍會通過。
+
+## MVP 已知限制
+
+- CGU 需要正式 API endpoint、模型清單格式與 CORS 政策；在此資訊確認前，介面會拒絕假成功。
+- OpenAI、xAI、Google 是否允許瀏覽器直連取決於各服務的 CORS／帳戶設定；失敗時需使用供應商允許的 endpoint 或日後另建受控 relay。
+- Whisper 模型與 ONNX runtime 初次下載較大，第一次轉錄需要等待；目前使用 WASM 基線，尚未加入 WebGPU 自動切換。
+- MVP 以段落編輯與人工標記 speaker 為主，尚未提供可靠的自動說話者分離。
+- API Key 目前只存在 React 工作階段 state，不會寫入 localStorage／IndexedDB；重新整理頁面需重新輸入。
+
