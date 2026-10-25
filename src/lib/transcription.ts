@@ -1,13 +1,23 @@
-import { pipeline } from '@huggingface/transformers'
 import type { Language, TranscriptSegment } from '../types'
 
 type Progress = { status?: string; progress?: number; file?: string }
-type ASRPipeline = (audio: Float32Array, options: Record<string, unknown>) => Promise<any>
+type WorkerResponse =
+  | { status: 'progress'; data: Progress }
+  | { status: 'ready' }
+  | { status: 'complete'; data: { text?: string; chunks?: Array<{ text?: string; timestamp?: [number, number] }> } }
+  | { status: 'error'; data: { message: string } }
 
-let currentPipeline: { model: string; pipe: ASRPipeline } | null = null
+let transcriptionWorker: Worker | null = null
 
 function modelForLanguage(language: Language, size: 'tiny' | 'base') {
   return language === 'en' ? `Xenova/whisper-${size}.en` : `Xenova/whisper-${size}`
+}
+
+function getWorker() {
+  if (!transcriptionWorker) {
+    transcriptionWorker = new Worker(new URL('./transcription.worker.ts', import.meta.url), { type: 'module' })
+  }
+  return transcriptionWorker
 }
 
 async function decodeAudio(file: Blob): Promise<Float32Array> {
@@ -30,24 +40,30 @@ async function decodeAudio(file: Blob): Promise<Float32Array> {
 }
 
 export async function transcribe(file: Blob, language: Language, size: 'tiny' | 'base', onProgress: (progress: Progress) => void): Promise<TranscriptSegment[]> {
-  const model = modelForLanguage(language, size)
-  if (!currentPipeline || currentPipeline.model !== model) {
-    onProgress({ status: '正在下載語音模型…', progress: 0 })
-    const pipe = await pipeline('automatic-speech-recognition', model, {
-      dtype: 'q8',
-      device: 'wasm',
-      progress_callback: onProgress,
-    }) as unknown as ASRPipeline
-    currentPipeline = { model, pipe }
-  }
   const audio = await decodeAudio(file)
-  onProgress({ status: '正在辨識語音…', progress: 0 })
-  const result = await currentPipeline.pipe(audio, {
-    return_timestamps: true,
-    chunk_length_s: 30,
-    stride_length_s: 5,
-    language: language === 'zh' ? 'chinese' : 'english',
-    task: 'transcribe',
+  const model = modelForLanguage(language, size)
+  const worker = getWorker()
+  onProgress({ status: `正在準備 ${model}（瀏覽器背景執行緒）…`, progress: 0 })
+
+  const result = await new Promise<{ text?: string; chunks?: Array<{ text?: string; timestamp?: [number, number] }> }>((resolve, reject) => {
+    worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+      const message = event.data
+      if (message.status === 'progress') {
+        onProgress(message.data)
+      } else if (message.status === 'ready') {
+        onProgress({ status: '正在辨識語音…', progress: 0 })
+      } else if (message.status === 'complete') {
+        resolve(message.data)
+      } else if (message.status === 'error') {
+        reject(new Error(message.data.message))
+      }
+    }
+    worker.onerror = (event) => {
+      transcriptionWorker?.terminate()
+      transcriptionWorker = null
+      reject(new Error(event.message || '語音模型背景執行緒載入失敗。'))
+    }
+    worker.postMessage({ type: 'transcribe', audio, model, language: language === 'zh' ? 'chinese' : 'english' }, [audio.buffer])
   })
   const chunks = Array.isArray(result?.chunks) ? result.chunks : []
   if (!chunks.length) {
