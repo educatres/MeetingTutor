@@ -4,7 +4,7 @@ import './styles.css'
 import type { GenerationResult, GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, ReferenceDocument, TranscriptSegment } from './types'
 import { PROVIDERS, generateText, listModels, providerLabel } from './lib/providers'
 import { readReference } from './lib/references'
-import { createPrompt, renderA4Html } from './lib/outputs'
+import { createPrompt, renderA4Html, renderTableHtml } from './lib/outputs'
 import { transcribe } from './lib/transcription'
 import { parseTeamsTranscript } from './lib/transcript'
 
@@ -50,10 +50,10 @@ type ModelTestStatus = 'idle' | 'testing' | 'available' | 'empty' | 'error'
 type GenerationStatus = { kind: 'working' | 'success' | 'error'; message: string }
 type OutputPreviewTarget = 'notice' | 'minutes' | 'actions' | 'agenda' | 'a4Html'
 const OUTPUT_ITEMS: Array<{ key: OutputPreviewTarget; label: string; filename: string; mime: string }> = [
-  { key: 'notice', label: '通知信', filename: '01_會後通知信.md', mime: 'text/markdown;charset=utf-8' },
-  { key: 'minutes', label: '完整會議紀錄', filename: '02_完整會議紀錄.md', mime: 'text/markdown;charset=utf-8' },
-  { key: 'actions', label: '本次待辦事項', filename: '03_本次待辦事項.md', mime: 'text/markdown;charset=utf-8' },
-  { key: 'agenda', label: '下次會議議程', filename: '04_下次會議議程.md', mime: 'text/markdown;charset=utf-8' },
+  { key: 'notice', label: '通知信（純文字）', filename: '01_會後通知信.txt', mime: 'text/plain;charset=utf-8' },
+  { key: 'minutes', label: '完整會議紀錄（純文字）', filename: '02_完整會議紀錄.txt', mime: 'text/plain;charset=utf-8' },
+  { key: 'actions', label: '本次待辦事項（HTML 表格）', filename: '03_本次待辦事項.html', mime: 'text/html;charset=utf-8' },
+  { key: 'agenda', label: '下次會議議程（HTML 表格）', filename: '04_下次會議議程.html', mime: 'text/html;charset=utf-8' },
   { key: 'a4Html', label: 'A4 HTML', filename: '05_會議成果彙整_A4列印.html', mime: 'text/html;charset=utf-8' },
 ]
 const SYSTEM_PROMPT_EXAMPLES = [
@@ -221,6 +221,10 @@ export default function App() {
     setMediaRecorder(null)
   }
 
+  const updateSegment = (id: string, text: string) => {
+    setSegments((current) => current.map((segment) => segment.id === id ? { ...segment, text } : segment))
+  }
+
   const runTranscription = async () => {
     if (uploadedTranscriptSegments.length) {
       setSegments(uploadedTranscriptSegments)
@@ -323,10 +327,20 @@ export default function App() {
       const prompt = createPrompt(segments, references, glossary, language)
       const result = await generateText(config, prompt, systemPrompt)
       const revised = result.revisedText || transcriptText
-      const notice = `主旨：【會後通知】會議名稱待確認｜日期待確認\n\n各位好：\n\n以下為模型整理草稿，請逐項核對原始逐字稿。\n\n一、語句修飾後內容\n${revised}\n\n二、專有名詞／姓名\n${result.terms.map((term) => `- ${term.source} → ${term.suggested}（${term.status}）`).join('\n') || '- 未偵測到可確認詞彙'}\n\n三、待確認事項\n${result.uncertainties.map((item) => `- ${item}`).join('\n') || '- 無'}\n\n本信為草稿，未寄出。`
-      const minutes = `# 會議名稱待確認｜會議紀錄\n\n- 會議日期／時間：待確認\n- 地點：未提供\n- 資料來源：瀏覽器端逐字稿與使用者參考資料\n\n## 一、修正後逐字稿\n${revised}\n\n## 二、修訂與來源\n${result.changes.map((change) => `- ${change.from} → ${change.to}：${change.reason}（${change.confidence}）`).join('\n') || '- 模型未提供差異'}\n\n## 三、決策與理由\n- DEC-DATE-UNKNOWN-01：狀態：未決；請人工確認，不得將模型推測視為正式決議。\n\n## 四、待確認事項\n${result.uncertainties.map((item) => `- ${item}`).join('\n') || '- 無'}`
-      const actions = `# 待辦追蹤表\n\n| 任務編號 | 待辦事項 | 主責人 | 協作人 | 完成標準 | 期限 | 狀態 | 關聯決策 | 來源會議 | 備註／阻礙 |\n|---|---|---|---|---|---|---|---|---|---|\n| ACT-DATE-UNKNOWN-01 | 人工核對模型修訂與待確認事項 | 待指定 | 無 | 完成核准的會議紀錄 | 待確認 | 待驗收 | DEC-DATE-UNKNOWN-01 | 會議名稱待確認 | 來源：模型輸出與逐字稿 |`
-      const agenda = `# 下次會議議程（草稿）\n\n- 預定日期：待安排\n- 會議目標：確認模型提出的修訂、專有名詞與未決事項。\n\n| 優先序 | 議題 | 事前準備／負責人 | 預期產出 | 關聯編號 |\n|---|---|---|---|---|\n| 1 | 檢閱未決與術語 | 會議紀錄者；提供原始資料 | 核准或修正決議 | DEC-DATE-UNKNOWN-01／ACT-DATE-UNKNOWN-01 |`
+      const notice = `主旨：【會後通知】會議名稱待確認｜日期待確認\n\n各位好：\n\n以下為模型整理草稿，請逐項核對原始逐字稿。\n\n一、語句修飾後內容\n${revised}\n\n二、專有名詞／姓名\n${result.terms.map((term) => `• ${term.source} → ${term.suggested}（${term.status}）`).join('\n') || '• 未偵測到可確認詞彙'}\n\n三、待確認事項\n${result.uncertainties.map((item) => `• ${item}`).join('\n') || '• 無'}\n\n本信為草稿，未寄出。`
+      const minutes = `會議名稱待確認｜會議紀錄\n\n會議日期／時間：待確認\n地點：未提供\n資料來源：瀏覽器端逐字稿與使用者參考資料\n\n一、修正後逐字稿\n${revised}\n\n二、修訂與來源\n${result.changes.map((change) => `• ${change.from} → ${change.to}：${change.reason}（${change.confidence}）`).join('\n') || '• 模型未提供差異'}\n\n三、決策與理由\n• DEC-DATE-UNKNOWN-01：狀態：未決；請人工確認，不得將模型推測視為正式決議。\n\n四、待確認事項\n${result.uncertainties.map((item) => `• ${item}`).join('\n') || '• 無'}`
+      const actions = renderTableHtml(
+        '待辦追蹤表',
+        ['請由會議紀錄者核對內容後再正式發佈。'],
+        ['任務編號', '待辦事項', '主責人', '協作人', '完成標準', '期限', '狀態', '關聯決策', '來源會議', '備註／阻礙'],
+        [['ACT-DATE-UNKNOWN-01', '人工核對模型修訂與待確認事項', '待指定', '無', '完成核准的會議紀錄', '待確認', '待驗收', 'DEC-DATE-UNKNOWN-01', '會議名稱待確認', '來源：模型輸出與逐字稿']],
+      )
+      const agenda = renderTableHtml(
+        '下次會議議程（草稿）',
+        ['預定日期：待安排', '會議目標：確認模型提出的修訂、專有名詞與未決事項。'],
+        ['優先序', '議題', '事前準備／負責人', '預期產出', '關聯編號'],
+        [['1', '檢閱未決與術語', '會議紀錄者；提供原始資料', '核准或修正決議', 'DEC-DATE-UNKNOWN-01／ACT-DATE-UNKNOWN-01']],
+      )
       const source = references.map((reference) => reference.name).join('、') || '未提供'
       setModelOutputBase({ notice, minutes, actions, agenda, source })
       setCorrectionResult(result)
@@ -370,7 +384,7 @@ export default function App() {
         {transcriptFile && <p className="file-note">已準備 Teams 逐字稿：{transcriptFile.name}（{uploadedTranscriptSegments.length} 段）</p>}
         <p className="hint">Whisper 模型首次下載後會保存於此瀏覽器快取；之後相同模型可直接重用。</p>
         <button className="primary" onClick={runTranscription} disabled={busy || (!audioFile && !transcriptFile)}>{busy ? '處理中…' : transcriptFile && !audioFile ? '載入逐字稿' : '開始轉錄／載入逐字稿'}</button>
-        <div className="live-transcript" aria-live="polite"><div className="live-transcript-heading"><strong>逐句轉錄結果</strong><span>{segments.length ? `目前 ${segments.length} 句` : '辨識時會逐句顯示在這裡'}</span></div><div className="live-transcript-box" ref={liveTranscriptRef}>{segments.length ? segments.map((segment) => <div className="live-segment" key={segment.id}><span className="timestamp">{formatSeconds(segment.start)}</span><span>{segment.text}</span></div>) : <p className="empty">尚未取得轉錄句子。</p>}</div></div>
+        <div className="live-transcript" aria-live="polite"><div className="live-transcript-heading"><strong>逐句轉錄結果（完成後可編修）</strong><span>{segments.length ? `目前 ${segments.length} 句` : '辨識時會逐句顯示在這裡'}</span></div><div className="live-transcript-box" ref={liveTranscriptRef}>{segments.length ? segments.map((segment, index) => <div className="live-segment" key={segment.id}><span className="timestamp">{formatSeconds(segment.start)}</span><input type="text" value={segment.text} onChange={(event) => updateSegment(segment.id, event.target.value)} disabled={busy} aria-label={`第 ${index + 1} 句逐字稿`} /></div>) : <p className="empty">尚未取得轉錄句子。</p>}</div></div>
         <p className="status" role="status">{status}</p>
       </section>
 
@@ -397,7 +411,7 @@ export default function App() {
         {output && <div className="output-ready" role="status">
           <div className="output-ready-heading"><strong>整理完成</strong><span>可先預覽內容，再下載需要的文件。</span></div>
           <div className="output-files">{OUTPUT_ITEMS.map((item) => <div className="output-file" key={item.key}><strong>{item.label}</strong><div className="output-file-actions"><button className={outputPreviewTarget === item.key ? 'preview-button is-active' : 'preview-button'} onClick={() => setOutputPreviewTarget((current) => current === item.key ? null : item.key)}>{outputPreviewTarget === item.key ? '收起預覽' : '預覽'}</button><button onClick={() => download(item.filename, output[item.key], item.mime)}>下載</button></div></div>)}</div>
-          {outputPreviewTarget && <div className="output-single-preview"><div className="output-preview-heading"><h3>{OUTPUT_ITEMS.find((item) => item.key === outputPreviewTarget)?.label}預覽</h3><button type="button" onClick={() => setOutputPreviewTarget(null)}>關閉</button></div>{outputPreviewTarget === 'a4Html' ? <iframe className="a4-preview-frame" title="A4 HTML 預覽" srcDoc={output.a4Html} sandbox="allow-modals allow-scripts" /> : <pre>{output[outputPreviewTarget]}</pre>}</div>}
+          {outputPreviewTarget && <div className="output-single-preview"><div className="output-preview-heading"><h3>{OUTPUT_ITEMS.find((item) => item.key === outputPreviewTarget)?.label}預覽</h3><button type="button" onClick={() => setOutputPreviewTarget(null)}>關閉</button></div>{outputPreviewTarget === 'actions' || outputPreviewTarget === 'agenda' || outputPreviewTarget === 'a4Html' ? <iframe className="a4-preview-frame" title={`${OUTPUT_ITEMS.find((item) => item.key === outputPreviewTarget)?.label}預覽`} srcDoc={output[outputPreviewTarget]} sandbox="allow-modals allow-scripts" /> : <pre>{output[outputPreviewTarget]}</pre>}</div>}
         </div>}
         {correctionResult && <div className="correction-review"><h3>文字校正確認</h3><p className="hint">紅色文字是模型建議的編修詞。預設為「同意編修」；請逐項選擇後再套用到匯出草稿。</p>{correctionResult.changes.length ? <div className="correction-list">{correctionResult.changes.map((change, index) => <div className="correction-item" key={`${change.from}-${change.to}-${index}`}><div className="correction-text"><span>原文：{change.from}</span><span>建議：<mark className="correction-red">{change.to}</mark></span><small>{change.reason}（信心：{change.confidence}）</small></div><select value={correctionDecisions[index] ?? 'accept'} onChange={(event) => setCorrectionDecisions((current) => ({ ...current, [index]: event.target.value as CorrectionDecision }))}><option value="keep">維持原文</option><option value="accept">同意編修</option><option value="custom">自己輸入</option></select>{correctionDecisions[index] === 'custom' && <input className="custom-correction" value={customCorrections[index] ?? ''} placeholder="輸入要使用的文字" onChange={(event) => setCustomCorrections((current) => ({ ...current, [index]: event.target.value }))} />}</div>)}</div> : <p className="empty">模型沒有回傳可辨識的編修詞。</p>}<div className="approved-preview"><strong>核准後文字預覽</strong><p>{approvedCorrectionText || correctionResult.revisedText}</p></div><button className="secondary" onClick={applyCorrectionsToOutput} disabled={!output || !correctionResult}>套用文字校正到匯出草稿</button></div>}
       </section>
