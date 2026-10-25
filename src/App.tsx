@@ -53,6 +53,22 @@ function formatSeconds(seconds: number) {
   return `${minutes}:${rest}`
 }
 
+function transcriptTextForDownload(segments: TranscriptSegment[]) {
+  return segments.map((segment) => {
+    const speaker = segment.speaker ? `｜${segment.speaker}` : ''
+    return `[${formatSeconds(segment.start)}${speaker}] ${segment.text}`
+  }).join('\n')
+}
+
+function downloadTextFile(name: string, content: string) {
+  const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: 'text/plain;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 type ModelTestStatus = 'idle' | 'testing' | 'available' | 'empty' | 'error'
 type GenerationStatus = { kind: 'working' | 'success' | 'error'; message: string }
 type RecordTemplate = 'meeting' | 'class'
@@ -231,6 +247,13 @@ export default function App() {
     setSegments((current) => current.map((segment) => segment.id === id ? { ...segment, text } : segment))
   }
 
+  const downloadTranscript = () => {
+    if (!segments.length) return
+    const baseName = audioFile?.name.replace(/\.[^.]+$/, '') || `meeting-${new Date().toISOString().slice(0, 10)}`
+    downloadTextFile(`${baseName}-逐字稿.txt`, transcriptTextForDownload(segments))
+    setStatus('逐字稿已下載。')
+  }
+
   const runTranscription = async () => {
     if (uploadedTranscriptSegments.length) {
       setSegments(uploadedTranscriptSegments)
@@ -388,6 +411,7 @@ export default function App() {
         <p className="hint">Whisper 模型首次下載後會保存於此瀏覽器快取；之後相同模型可直接重用。</p>
         <button className="primary" onClick={runTranscription} disabled={busy || (!audioFile && !transcriptFile)}>{busy ? '處理中…' : transcriptFile && !audioFile ? '載入逐字稿' : '開始轉錄／載入逐字稿'}</button>
         <div className="live-transcript" aria-live="polite"><div className="live-transcript-heading"><strong>逐句轉錄結果（完成後可編修）</strong><span>{segments.length ? `目前 ${segments.length} 句` : '辨識時會逐句顯示在這裡'}</span></div><div className="live-transcript-box" ref={liveTranscriptRef}>{segments.length ? segments.map((segment, index) => <div className="live-segment" key={segment.id}><span className="timestamp">{formatSeconds(segment.start)}</span><input type="text" value={segment.text} onChange={(event) => updateSegment(segment.id, event.target.value)} disabled={busy} aria-label={`第 ${index + 1} 句逐字稿`} /></div>) : <p className="empty">尚未取得轉錄句子。</p>}</div></div>
+        {audioFile && segments.length > 0 && !busy && <div className="transcript-actions"><button className="secondary" type="button" onClick={downloadTranscript}>下載逐字稿（TXT）</button></div>}
         <p className="status" role="status">{status}</p>
       </section>
 

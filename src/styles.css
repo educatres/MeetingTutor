@@ -69,6 +69,7 @@ button { cursor: pointer; }
 .live-segment input:focus { outline: 2px solid #63a8c4; outline-offset: 1px; border-color: #4a98b7; }
 .live-segment input:disabled { background: transparent; border-color: transparent; opacity: 1; }
 .live-transcript-box .empty { margin: 0; padding: 28px 14px; }
+.transcript-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
 .model-available, .model-unavailable { display: inline-block; margin: 12px 0 0 10px; padding: 8px 10px; border-radius: 7px; font-size: 13px; font-weight: 700; }
 .model-available { color: #17633b; background: #e8f6ee; border: 1px solid #a9dbbc; }
 .model-unavailable { color: #805c13; background: #fff8e5; border: 1px solid #e4c979; }
