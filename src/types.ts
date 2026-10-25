@@ -55,7 +55,6 @@ export interface GenerationResult {
 
 export interface MeetingOutput {
   minutes: string
-  actions: string
-  agenda: string
-  a4Html: string
+  actions?: string
+  agenda?: string
 }

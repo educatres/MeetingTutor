@@ -1,6 +1,8 @@
 import type { GlossaryTerm, Language, MeetingOutput, ReferenceDocument, TranscriptSegment } from '../types'
 
-const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+export const normalizeLineBreaks = (value: string) => value.replace(/\\r\\n|\\n|\\r/g, '\n').replace(/\r\n?/g, '\n')
+const escapeHtml = (value: string) => normalizeLineBreaks(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+const htmlText = (value: string) => escapeHtml(value).replace(/\n/g, '<br>')
 const textLines = (segments: TranscriptSegment[]) => segments.map((segment) => `[${formatTime(segment.start)}] ${segment.speaker ? `${segment.speaker}: ` : ''}${segment.text}`).join('\n')
 const formatTime = (seconds: number) => {
   if (!Number.isFinite(seconds) || seconds <= 0) return '00:00'
@@ -21,15 +23,11 @@ export function createPrompt(segments: TranscriptSegment[], references: Referenc
 }
 
 export function renderTableHtml(title: string, summary: string[], headers: string[], rows: string[][], notes: string[] = []) {
-  const summaryHtml = summary.filter(Boolean).map((line) => `<p>${escapeHtml(line)}</p>`).join('')
+  const summaryHtml = summary.filter(Boolean).map((line) => `<p>${htmlText(line)}</p>`).join('')
   const headerHtml = headers.map((header) => `<th scope="col">${escapeHtml(header)}</th>`).join('')
-  const rowsHtml = rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')
-  const notesHtml = notes.length ? `<section><h2>補充說明</h2><ul>${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul></section>` : ''
-  return `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><style>*{box-sizing:border-box}@page{size:A4 landscape;margin:14mm}body{margin:0;background:#eef2f4;color:#202833;font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;line-height:1.55}main{width:min(1180px,calc(100% - 24px));margin:12px auto;padding:24px;background:#fff;box-shadow:0 2px 14px #ccd5da}h1{margin:0 0 16px;color:#1e4058;font-size:24px}h2{font-size:17px}.summary{margin-bottom:16px;color:#485b67}.summary p{margin:3px 0}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:9px 10px;border:1px solid #aebdc5;text-align:left;vertical-align:top}th{background:#dfeef3;color:#1e4058;white-space:nowrap}tr:nth-child(even) td{background:#f7fafb}li{margin:4px 0}@media print{body{background:#fff}main{width:auto;margin:0;padding:0;box-shadow:none}.table-wrap{overflow:visible}tr{break-inside:avoid}}</style></head><body><main><h1>${escapeHtml(title)}</h1><div class="summary">${summaryHtml}</div><div class="table-wrap"><table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div>${notesHtml}</main></body></html>`
-}
-
-function htmlMainContent(document: string) {
-  return document.match(/<main[^>]*>([\s\S]*?)<\/main>/i)?.[1] ?? `<pre>${escapeHtml(document)}</pre>`
+  const rowsHtml = rows.map((row) => `<tr>${row.map((cell) => `<td>${htmlText(cell)}</td>`).join('')}</tr>`).join('')
+  const notesHtml = notes.length ? `<section><h2>補充說明</h2><ul>${notes.map((note) => `<li>${htmlText(note)}</li>`).join('')}</ul></section>` : ''
+  return `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><style>*{box-sizing:border-box}body{margin:0;background:#eef2f4;color:#202833;font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;line-height:1.55}main{width:min(1180px,calc(100% - 24px));margin:12px auto;padding:24px;background:#fff;box-shadow:0 2px 14px #ccd5da}h1{margin:0 0 16px;color:#1e4058;font-size:24px}h2{font-size:17px}.summary{margin-bottom:16px;color:#485b67}.summary p{margin:3px 0}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:9px 10px;border:1px solid #aebdc5;text-align:left;vertical-align:top}th{background:#dfeef3;color:#1e4058;white-space:nowrap}tr:nth-child(even) td{background:#f7fafb}li{margin:4px 0}@media print{body{background:#fff}main{width:auto;margin:0;padding:0;box-shadow:none}.table-wrap{overflow:visible}tr{break-inside:avoid}}</style></head><body><main><h1>${escapeHtml(title)}</h1><div class="summary">${summaryHtml}</div><div class="table-wrap"><table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div>${notesHtml}</main></body></html>`
 }
 
 export function localOutputs(segments: TranscriptSegment[], references: ReferenceDocument[], glossary: GlossaryTerm[]): MeetingOutput {
@@ -39,10 +37,5 @@ export function localOutputs(segments: TranscriptSegment[], references: Referenc
   const minutes = `會議名稱待確認｜會議紀錄\n\n會議日期／時間：待確認\n地點：未提供\n主席：未提供\n紀錄：未提供\n出席／列席：未提供\n資料來源：逐字稿；參考資料：${sourceText}\n\n一、會議摘要\n目前僅建立可供人工檢閱的草稿，尚未將任何討論內容標記為正式決議。\n\n二、逐字稿\n${transcript}\n\n三、詞彙與姓名參考\n${glossaryText}\n\n四、決策與理由\n• DEC-DATE-UNKNOWN-01｜尚未確認的決策：狀態：未決；決策內容、理由與未採用方案：未提及。\n\n五、未決問題與待確認事項\n• 請補充會議名稱、日期、參與者、決議、主責人與期限。\n\n六、下次會議\n待安排。`
   const actions = renderTableHtml('待辦追蹤表', [], ['任務編號', '待辦事項', '主責人', '協作人', '完成標準', '期限', '狀態', '關聯決策', '來源會議', '備註／阻礙'], [['ACT-DATE-UNKNOWN-01', '檢閱逐字稿並補充會議資料', '待指定', '無', '完成核准會議紀錄', '待確認', '未開始', 'DEC-DATE-UNKNOWN-01', '會議名稱待確認', '尚未確認會議基本資料']])
   const agenda = renderTableHtml('下次會議議程（草稿）', ['預定日期：待安排', '承接會議：會議名稱待確認｜日期待確認', '會議目標：確認會議基本資料、決策、待辦主責與期限。'], ['優先序', '議題', '背景／待解問題', '事前準備／負責人', '預期產出', '關聯編號'], [['1', '補充並確認會議資料', '目前資料不足，無法判定正式決議', '請相關人員提供', '核准會議紀錄', 'DEC-DATE-UNKNOWN-01／ACT-DATE-UNKNOWN-01']], ['提供會議名稱、日期、出席者、決議、負責人、完成標準與期限。'])
-  return { minutes, actions, agenda, a4Html: renderA4Html(minutes, actions, agenda, sourceText) }
-}
-
-export function renderA4Html(minutes: string, actions: string, agenda: string, sourceText = '未提供') {
-  const pre = (value: string) => `<pre>${escapeHtml(value)}</pre>`
-  return `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>MeetingTutor｜會議成果彙整</title><style>*{box-sizing:border-box}@page{size:A4 portrait;margin:16mm 15mm 16mm 15mm}body{margin:0;color:#202833;font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;font-size:10.5pt;line-height:1.55}main{width:210mm;max-width:100%;margin:0 auto;padding:16mm 15mm;background:#fff}h1{font-size:20pt;margin:0 0 5mm}h2{font-size:13pt;margin:8mm 0 3mm;padding-bottom:2mm;border-bottom:1px solid #aab3bd}pre{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;padding:3mm;background:#f7f8fa;border-left:2px solid #7b8794}p{margin:0 0 2.5mm}.muted{color:#596675}.embedded-document h1{font-size:13pt;margin:0 0 3mm}.embedded-document .summary{margin-bottom:3mm}.embedded-document .table-wrap{overflow:visible}.embedded-document table{width:100%;border-collapse:collapse;font-size:8pt}.embedded-document th,.embedded-document td{padding:1.5mm;border:1px solid #aebdc5;text-align:left;vertical-align:top}.embedded-document th{background:#dfeef3}.embedded-document section h2{font-size:11pt;margin-top:4mm}@media print{main{width:auto;max-width:none;margin:0;padding:0}.screen-only{display:none!important}pre{break-inside:auto}tr{break-inside:avoid}}@media screen{body{background:#f3f5f7}main{margin:12px auto 25px;box-shadow:0 2px 15px #d8dde2}}</style></head><body><main><div class="screen-only"><button onclick="window.print()">列印／另存 PDF</button></div><h1>會議名稱待確認｜會議成果彙整</h1><p class="muted">資料來源：${escapeHtml(sourceText)}｜文件狀態：草稿，請人工核准</p><h2>一、完整會議紀錄與決策脈絡</h2>${pre(minutes)}<h2>二、待辦追蹤</h2><div class="embedded-document">${htmlMainContent(actions)}</div><h2>三、下次會議議程</h2><div class="embedded-document">${htmlMainContent(agenda)}</div><h2>附錄｜待確認事項</h2><p>本文件中的會議名稱、日期、決策、待辦主責與期限均需依原始資料確認；不可將 AI 建議視為正式決議。</p></main></body></html>`
+  return { minutes: normalizeLineBreaks(minutes), actions, agenda }
 }

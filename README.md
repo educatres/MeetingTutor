@@ -23,5 +23,5 @@
 - OpenAI、xAI、Google 是否允許瀏覽器直連取決於各服務的 CORS／帳戶設定；失敗時需使用供應商允許的 endpoint 或日後另建受控 relay。
 - Whisper 模型與 ONNX runtime 初次下載較大，第一次轉錄需要等待；目前使用 WASM 基線，尚未加入 WebGPU 自動切換。
 - MVP 以段落編輯與人工標記 speaker 為主，尚未提供可靠的自動說話者分離。
-- API Key 會依 Provider 保存在目前瀏覽器的 `localStorage`，重新整理後可沿用；使用者可在第四步按「清除 API Key」移除。請只在自己信任的裝置使用此功能。
+- API Key、Provider、Base URL、選定模型、推理程度與自訂 System Prompt 會保存在目前瀏覽器的 `localStorage`，重新整理後可直接沿用；使用者可從頁首的「AI 設定」面板清除 API Key 或修改設定。請只在自己信任的裝置使用此功能。
 
