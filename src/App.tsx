@@ -96,6 +96,7 @@ const RECORD_TEMPLATE_OPTIONS: Array<{ id: RecordTemplate; label: string; headin
   { id: 'memo', label: '工作備忘錄', headings: '重點摘要、目前進度、待處理事項、重要決定、後續追蹤' },
   { id: 'experiment', label: '口述實驗記錄', headings: '實驗目的、材料設備、操作步驟、觀察結果、異常原因、結論' },
   { id: 'journal', label: '個人日誌', headings: '事件與經過、想法與感受、重要收穫、待辦與明日計畫' },
+  { id: 'interview', label: '採訪/訪談', headings: '訪談主題、日期／時間、受訪者背景、訪談摘要、重要觀點與引述、待追問事項、後續行動' },
 ]
 
 function recordTemplateLabel(template: RecordTemplate) {
