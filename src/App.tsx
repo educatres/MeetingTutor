@@ -394,8 +394,8 @@ export default function App() {
       const suggestions = parseGlossarySuggestions(response).map((suggestion) => ({ ...suggestion, id: crypto.randomUUID() }))
       setGlossarySuggestions(suggestions)
       setGlossaryStatus(suggestions.length ? `已找到 ${suggestions.length} 個詞彙建議，紅色文字可編輯。` : '模型沒有找到需要修正的詞彙。')
-    } catch (error) {
-      setGlossaryStatus(`詞彙校正失敗：${error instanceof Error ? error.message : String(error)}`)
+    } catch {
+      setGlossaryStatus('AI 非預期分析中斷，請重新點按「AI 修飾、校正詞彙」。')
     } finally {
       setBusy(false)
     }
@@ -403,21 +403,6 @@ export default function App() {
 
   const updateGlossarySuggestion = (id: string, suggested: string) => {
     setGlossarySuggestions((current) => current.map((item) => item.id === id ? { ...item, suggested } : item))
-  }
-
-  const confirmGlossarySuggestions = () => {
-    const suggestions = glossarySuggestions
-      .map((suggestion) => ({ ...suggestion, canonical: suggestion.suggested.trim() }))
-      .filter((suggestion) => suggestion.canonical)
-    setGlossary((current) => {
-      const existing = new Set(current.map((term) => term.canonical))
-      const additions = suggestions
-        .filter((suggestion) => !existing.has(suggestion.canonical))
-        .map((suggestion) => ({ canonical: suggestion.canonical, aliases: suggestion.original, kind: '其他' as const, locked: false }))
-      return [...current, ...additions]
-    })
-    setGlossarySuggestions([])
-    setGlossaryStatus(suggestions.length ? `已確認 ${suggestions.length} 個詞彙建議。` : '沒有可確認的詞彙建議。')
   }
 
   const changeRecordTemplate = (template: RecordTemplate) => {
@@ -519,7 +504,7 @@ export default function App() {
         <div className="supplement-block"><h3>確認詞彙</h3><div className="glossary-form"><textarea className="glossary-input" rows={2} placeholder="輸入姓名或專有名詞，以逗號或換行分隔，例如：王小明、MeetingTutor、CGU" value={newTermText} onChange={(e) => setNewTermText(e.target.value)} /><button className="secondary" onClick={addTerm}>加入詞彙</button></div>{glossary.length > 0 && <div className="chips">{glossary.map((term) => <button key={`${term.canonical}-${term.kind}`} className="chip" onClick={() => setGlossary((current) => current.filter((item) => item !== term))}>{term.kind}：{term.canonical} ×</button>)}</div>}{glossaryStatus && <p className="glossary-status" role="status">{glossaryStatus}</p>}</div>
         <div className="supplement-block"><h3>參考檔案</h3><label className="file-picker wide"><span>加入 PDF、TXT 或 Markdown</span><input type="file" accept="application/pdf,text/plain,text/markdown,.md,.txt" multiple onChange={addReferences} disabled={busy} /></label>{references.length > 0 && <ul className="reference-list">{references.map((reference) => <li key={reference.id}><span>{reference.name}</span><small>{reference.type === 'pdf' ? `${reference.pages} 頁` : `${reference.text.length.toLocaleString()} 字`}</small><button onClick={() => setReferences((current) => current.filter((item) => item.id !== reference.id))}>移除</button></li>)}</ul>}</div>
         <div className="glossary-ai-action"><button className="secondary" type="button" onClick={refineGlossary} disabled={busy}>AI 修飾、校正詞彙</button></div>
-        {glossarySuggestions.length > 0 && <div className="glossary-suggestions"><strong>AI 詞彙建議（紅色文字為修飾結果，可直接編輯）</strong><div className="glossary-suggestion-grid">{glossarySuggestions.map((suggestion) => <div className="glossary-suggestion" key={suggestion.id}><div className="glossary-suggestion-copy"><span>原詞：{suggestion.original}</span><label>修飾後：<input className="glossary-suggestion-input" value={suggestion.suggested} onChange={(event) => updateGlossarySuggestion(suggestion.id, event.target.value)} /></label>{suggestion.reason && <small>{suggestion.reason}</small>}</div></div>)}</div><div className="glossary-suggestions-confirm"><button className="primary" type="button" onClick={confirmGlossarySuggestions}>確定</button></div></div>}
+        {glossarySuggestions.length > 0 && <div className="glossary-suggestions"><strong>AI 詞彙建議</strong><p className="glossary-suggestions-hint">如有不滿意 AI 修正的詞彙，只需要直接編輯紅色文字即可；完成後即可進入步驟三產生摘要。</p><div className="glossary-suggestion-grid">{glossarySuggestions.map((suggestion) => <div className="glossary-suggestion" key={suggestion.id}><div className="glossary-suggestion-copy"><span>原詞：{suggestion.original}</span><label>修飾後：<input className="glossary-suggestion-input" value={suggestion.suggested} onChange={(event) => updateGlossarySuggestion(suggestion.id, event.target.value)} /></label>{suggestion.reason && <small>{suggestion.reason}</small>}</div></div>)}</div></div>}
       </section>
 
       <section className="panel output-panel">
