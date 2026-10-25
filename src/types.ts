@@ -29,6 +29,12 @@ export interface GlossaryTerm {
   locked: boolean
 }
 
+export interface GlossarySuggestion {
+  original: string
+  suggested: string
+  reason: string
+}
+
 export interface ModelInfo {
   id: string
   displayName: string

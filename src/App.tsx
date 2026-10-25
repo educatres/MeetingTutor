@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import './styles.css'
-import type { GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, ReferenceDocument, TranscriptSegment } from './types'
+import type { GlossarySuggestion, GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, ReferenceDocument, TranscriptSegment } from './types'
 import { PROVIDERS, generateText, isAllowedTextModel, listModels, providerLabel } from './lib/providers'
 import { readReference } from './lib/references'
-import { cleanPlainTextOutput, createPrompt, extractPlainTextSection } from './lib/outputs'
+import { cleanPlainTextOutput, createGlossaryPrompt, createPrompt, extractPlainTextSection, parseGlossarySuggestions } from './lib/outputs'
 import { transcribe } from './lib/transcription'
 import { parseTeamsTranscript } from './lib/transcript'
 
@@ -92,6 +92,8 @@ export default function App() {
   const [segments, setSegments] = useState<TranscriptSegment[]>([])
   const [references, setReferences] = useState<ReferenceDocument[]>([])
   const [glossary, setGlossary] = useState<GlossaryTerm[]>([])
+  const [glossarySuggestions, setGlossarySuggestions] = useState<Array<GlossarySuggestion & { id: string }>>([])
+  const [glossaryStatus, setGlossaryStatus] = useState<string | null>(null)
   const [newTermText, setNewTermText] = useState('')
   const [config, setConfig] = useState<ProviderConfig>(initialProviderConfig)
   const [models, setModels] = useState<ModelInfo[]>([])
@@ -309,7 +311,6 @@ export default function App() {
       setConfig((current) => ({ ...current, modelId: selectedModelId }))
       setModelTestStatus(result.length ? 'available' : 'empty')
       setStatus(result.length ? `模型可用：已讀取 ${result.length} 個模型。${config.id === 'cgu' && /luna/i.test(`${result[0].id} ${result[0].displayName}`) ? `預設選擇最新 Luna：${result[0].displayName}` : ''}` : '測試成功，但 provider 沒有回傳可列舉的模型。')
-      if (result.length) setSettingsOpen(false)
     } catch (error) {
       setModels([])
       setModelTestStatus('error')
@@ -332,6 +333,45 @@ export default function App() {
     if (!terms.length) return
     setGlossary((current) => [...current, ...terms.filter((term) => !current.some((item) => item.canonical === term)).map((canonical) => ({ canonical, aliases: '', kind: '其他' as const, locked: true }))])
     setNewTermText('')
+  }
+
+  const refineGlossary = async () => {
+    if (!segments.length) {
+      setGlossaryStatus('請先上傳並載入逐字稿。')
+      return
+    }
+    if (!config.apiKey.trim() || !config.modelId) {
+      setGlossaryStatus('請先完成 AI 設定並測試模型。')
+      setSettingsOpen(true)
+      return
+    }
+    setBusy(true)
+    setGlossaryStatus('AI 正在從逐字稿整理詞彙建議…')
+    try {
+      const response = await generateText(config, createGlossaryPrompt(segments, glossary, language), systemPrompt)
+      const suggestions = parseGlossarySuggestions(response).map((suggestion) => ({ ...suggestion, id: crypto.randomUUID() }))
+      setGlossarySuggestions(suggestions)
+      setGlossaryStatus(suggestions.length ? `已找到 ${suggestions.length} 個詞彙建議，紅色文字可編輯。` : '模型沒有找到需要修正的詞彙。')
+    } catch (error) {
+      setGlossaryStatus(`詞彙校正失敗：${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const updateGlossarySuggestion = (id: string, suggested: string) => {
+    setGlossarySuggestions((current) => current.map((item) => item.id === id ? { ...item, suggested } : item))
+  }
+
+  const restoreGlossarySuggestion = (id: string) => {
+    setGlossarySuggestions((current) => current.map((item) => item.id === id ? { ...item, suggested: item.original } : item))
+  }
+
+  const acceptGlossarySuggestion = (suggestion: GlossarySuggestion & { id: string }) => {
+    const canonical = suggestion.suggested.trim()
+    if (!canonical) return
+    setGlossary((current) => current.some((item) => item.canonical === canonical) ? current : [...current, { canonical, aliases: suggestion.original, kind: '其他' as const, locked: false }])
+    setGlossarySuggestions((current) => current.filter((item) => item.id !== suggestion.id))
   }
 
   const changeRecordTemplate = (template: RecordTemplate) => {
@@ -378,7 +418,6 @@ export default function App() {
       const message = '整理完成，成果已直接顯示在下方。'
       setGenerationStatus({ kind: 'success', message })
       setStatus(message)
-      setSettingsOpen(false)
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       const readableDetail = /failed to fetch|load failed|networkerror/i.test(detail)
@@ -394,12 +433,13 @@ export default function App() {
 
   return <div className="app-shell">
     <header className="hero">
-      <div className="hero-main"><p className="eyebrow">MeetingTutor</p><h1>會議記錄、上課錄音助教</h1><div className="header-actions"><button className={config.apiKey && config.modelId ? 'settings-toggle is-ready' : 'settings-toggle'} type="button" onClick={() => setSettingsOpen((current) => !current)} aria-expanded={settingsOpen}><span>AI 設定</span><small>{config.apiKey && config.modelId ? `${providerLabel(config.id)}｜${config.modelId}` : '尚未完成設定'}</small></button></div>{hardwareResult && <p className="hardware-result" role="status">{hardwareResult}</p>}</div>
-      <section className={settingsOpen ? 'ai-settings-panel is-open' : 'ai-settings-panel is-closed'} aria-label="AI 模型設定" aria-hidden={!settingsOpen}>
-        <div className="settings-panel-heading"><div><h2>AI 模型設定</h2><p>設定會保存在此瀏覽器；連線正常時，下次開啟可直接沿用。</p></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="關閉 AI 設定">關閉</button></div>
+      <div className="hero-main"><p className="eyebrow">MeetingTutor</p><h1>會議記錄、上課錄音助教</h1><div className="header-actions"><button className={config.apiKey && config.modelId ? 'settings-toggle is-ready' : 'settings-toggle'} type="button" onClick={() => setSettingsOpen(true)} aria-expanded={settingsOpen}><span>AI 設定</span><small>{config.apiKey && config.modelId ? `${providerLabel(config.id)}｜${config.modelId}` : '尚未完成設定'}</small></button></div>{hardwareResult && <p className="hardware-result" role="status">{hardwareResult}</p>}</div>
+      {settingsOpen && <section className="ai-settings-panel" aria-label="AI 模型設定">
+        <div className="settings-panel-heading"><div><h2>AI 模型設定</h2><p>設定會保存在此瀏覽器；連線正常時，下次開啟可直接沿用。</p></div></div>
         <div className="provider-grid"><label className="field"><span>Provider</span><select value={config.id} onChange={(e) => updateProvider(e.target.value as ProviderId)} disabled={busy}>{PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label><label className="field"><span>API Key（保存在本機瀏覽器）</span><div className="key-input"><input type={showKey ? 'text' : 'password'} value={config.apiKey} onChange={(e) => updateApiKey(e.target.value)} autoComplete="off" placeholder="貼上你的 Key" disabled={busy} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? '隱藏' : '顯示'}</button><button type="button" onClick={clearApiKeys} disabled={busy}>清除 API Key</button></div></label><label className="field"><span>API Base URL</span><input value={config.baseUrl ?? ''} onChange={(e) => updateBaseUrl(e.target.value)} disabled={busy} /></label>{config.id === 'cgu' && <label className="field"><span>CGU 推理程度（預設：中）</span><select value={config.reasoningEffort ?? 'medium'} onChange={(e) => setConfig((current) => ({ ...current, reasoningEffort: e.target.value as ReasoningEffort }))} disabled={busy}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>}</div>
         <p className="hint">{PROVIDERS.find((provider) => provider.id === config.id)?.hint}</p><button className="secondary" onClick={testProvider} disabled={busy || !config.apiKey}>{busy ? '測試中…' : config.modelId ? '重新測試並更新模型' : '測試 Key 並讀取模型'}</button>{modelTestStatus === 'available' && <p className="model-available" role="status">模型可用（已讀取 {models.length} 個），設定已自動保存。</p>}{modelTestStatus === 'empty' && <p className="model-unavailable" role="status">測試成功，但沒有可列舉的模型。</p>}{modelTestStatus === 'error' && <p className="model-unavailable" role="alert">模型呼叫失敗，請檢查 Key、Base URL、模型或服務狀態。</p>}{config.modelId && !models.length && modelTestStatus !== 'error' && <p className="stored-model">已保存模型：{config.modelId}</p>}{models.length > 0 && <label className="field model-select"><span>選擇模型</span><select value={config.modelId ?? ''} onChange={(e) => setConfig({ ...config, modelId: e.target.value })}>{models.map((model) => <option key={model.id} value={model.id}>{model.displayName}（{model.id}）</option>)}</select></label>}
-      </section>
+        <div className="settings-close-row"><button type="button" onClick={() => setSettingsOpen(false)}>關閉 AI 設定</button></div>
+      </section>}
     </header>
 
     <main className="workspace">
@@ -422,8 +462,8 @@ export default function App() {
       </section>
 
       <section className="panel">
-        <div className="section-heading"><span className="step">2</span><div><h2>逐字稿修正補充資料 (修正專有名詞、人名的錯誤，可跳過)</h2><p>加入已確認詞彙或參考檔案，協助模型修正專有名詞與姓名。</p></div></div>
-        <div className="supplement-block"><h3>確認詞彙</h3><div className="glossary-form"><textarea className="glossary-input" rows={2} placeholder="輸入姓名或專有名詞，以逗號或換行分隔，例如：王小明、MeetingTutor、CGU" value={newTermText} onChange={(e) => setNewTermText(e.target.value)} /><button className="secondary" onClick={addTerm}>加入詞彙</button></div>{glossary.length > 0 && <div className="chips">{glossary.map((term) => <button key={`${term.canonical}-${term.kind}`} className="chip" onClick={() => setGlossary((current) => current.filter((item) => item !== term))}>{term.kind}：{term.canonical} ×</button>)}</div>}</div>
+        <div className="section-heading"><span className="step">2</span><div><h2>逐字稿修正補充資料 (修正專有名詞、人名的錯誤，可跳過)</h2><p>加入已確認詞彙或參考檔案，協助模型修正專有名詞與姓名。</p></div><button className="secondary glossary-ai-button" type="button" onClick={refineGlossary} disabled={busy}>AI 修飾、校正詞彙</button></div>
+        <div className="supplement-block"><h3>確認詞彙</h3><div className="glossary-form"><textarea className="glossary-input" rows={2} placeholder="輸入姓名或專有名詞，以逗號或換行分隔，例如：王小明、MeetingTutor、CGU" value={newTermText} onChange={(e) => setNewTermText(e.target.value)} /><button className="secondary" onClick={addTerm}>加入詞彙</button></div>{glossary.length > 0 && <div className="chips">{glossary.map((term) => <button key={`${term.canonical}-${term.kind}`} className="chip" onClick={() => setGlossary((current) => current.filter((item) => item !== term))}>{term.kind}：{term.canonical} ×</button>)}</div>}{glossaryStatus && <p className="glossary-status" role="status">{glossaryStatus}</p>}{glossarySuggestions.length > 0 && <div className="glossary-suggestions"><strong>AI 詞彙建議（紅色文字為修飾結果，可直接編輯）</strong>{glossarySuggestions.map((suggestion) => <div className="glossary-suggestion" key={suggestion.id}><div className="glossary-suggestion-copy"><span>原詞：{suggestion.original}</span><label>修飾後：<input className="glossary-suggestion-input" value={suggestion.suggested} onChange={(event) => updateGlossarySuggestion(suggestion.id, event.target.value)} /></label>{suggestion.reason && <small>{suggestion.reason}</small>}</div><div className="glossary-suggestion-actions"><button className="secondary" type="button" onClick={() => restoreGlossarySuggestion(suggestion.id)}>還原</button><button className="primary" type="button" onClick={() => acceptGlossarySuggestion(suggestion)}>加入詞彙</button></div></div>)}</div>}</div>
         <div className="supplement-block"><h3>參考檔案</h3><label className="file-picker wide"><span>加入 PDF、TXT 或 Markdown</span><input type="file" accept="application/pdf,text/plain,text/markdown,.md,.txt" multiple onChange={addReferences} disabled={busy} /></label>{references.length > 0 && <ul className="reference-list">{references.map((reference) => <li key={reference.id}><span>{reference.name}</span><small>{reference.type === 'pdf' ? `${reference.pages} 頁` : `${reference.text.length.toLocaleString()} 字`}</small><button onClick={() => setReferences((current) => current.filter((item) => item.id !== reference.id))}>移除</button></li>)}</ul>}<p className="hint">掃描型 PDF 沒有文字層時，系統會提示需要 OCR，不會假裝讀取成功。</p></div>
       </section>
 

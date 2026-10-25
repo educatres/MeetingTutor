@@ -1,4 +1,4 @@
-import type { GlossaryTerm, Language, ReferenceDocument, TranscriptSegment } from '../types'
+import type { GlossarySuggestion, GlossaryTerm, Language, ReferenceDocument, TranscriptSegment } from '../types'
 
 export const normalizeLineBreaks = (value: string) => value.replace(/\\r\\n|\\n|\\r/g, '\n').replace(/\r\n?/g, '\n')
 const formatTime = (seconds: number) => {
@@ -89,4 +89,35 @@ export function createPrompt(segments: TranscriptSegment[], references: Referenc
     ? `請整理成一份可直接使用的「課堂筆記」，依序包含：\n課程主題\n日期／授課者（未提及就寫「未提供」）\n一、課程摘要\n二、學習目標\n三、核心概念與定義\n四、各主題重點講解\n五、例子／案例／示範\n六、作業、閱讀或重要提醒\n七、待釐清問題\n請保留教師的論述脈絡與關鍵例子，不要改寫成會議決議格式。`
     : `請整理成一份完整、可直接使用且易讀的「會議記錄摘要」，依序包含：\n會議主題\n日期／時間／地點／與會者（未提及就寫「未提供」）\n一、會議摘要\n二、討論重點（依議題分段）\n三、決議事項與理由\n四、待辦事項（內容、負責人、期限；未提及就寫「未指定」）\n五、未決問題與待確認事項\n六、後續安排`
   return `你是專業的紀錄整理人員。只根據逐字稿、已確認詞彙與參考資料工作，不得虛構姓名、日期、期限、決議、作業或理由。不確定的內容請明確寫「待確認」，不要自行推測。移除口頭贅詞、重複語句與無意義停頓，但保留原意、重要細節、不同觀點與脈絡。輸出語言必須是${outputLanguage}。\n\n${template}\n\n請直接輸出最終純文字文件，不要輸出 JSON、XML、HTML、Markdown、程式碼框、欄位代碼、分析過程、前言或結語。標題使用一般文字，清單使用「•」或中文編號。不要附上原始逐字稿全文。若逐字稿沒有明確的待辦事項或後續安排，對應段落只寫「無」，不得自行補造。\n\n使用者確認詞彙：\n${terms}\n\n參考資料：\n${refs}\n\n逐字稿：\n${transcriptForPrompt(segments)}`
+}
+
+export function createGlossaryPrompt(segments: TranscriptSegment[], glossary: GlossaryTerm[], language: Language) {
+  const existing = glossary.map((term) => `${term.canonical}${term.aliases ? `（別名：${term.aliases}）` : ''}`).join('、') || '（目前沒有既有詞彙）'
+  const outputLanguage = language === 'zh' ? '繁體中文' : '英文'
+  return `你是專業的逐字稿詞彙校正助手。請只根據以下逐字稿，找出可能的誤聽、錯字、專有名詞或同一詞彙的不同寫法，提出保守的修正建議。不得虛構逐字稿沒有出現的人名、產品名或術語；沒有明確修正時輸出空陣列。輸出語言為${outputLanguage}。\n\n只輸出 JSON 陣列，不要輸出 Markdown 或其他文字，格式如下：[{"original":"逐字稿中的原詞","suggested":"建議詞彙","reason":"簡短修正理由"}]。original 必須確實出現在逐字稿，suggested 必須與 original 不同；最多 30 筆。\n\n目前詞彙表：\n${existing}\n\n逐字稿：\n${transcriptForPrompt(segments)}`
+}
+
+export function parseGlossarySuggestions(value: string): GlossarySuggestion[] {
+  const text = normalizeLineBreaks(value).replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+  const match = text.match(/\[[\s\S]*\]/) || text.match(/\{[\s\S]*\}/)
+  if (!match) return []
+  try {
+    const parsed = JSON.parse(match[0]) as unknown
+    const rows = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === 'object'
+        ? ((parsed as Record<string, unknown>).suggestions ?? (parsed as Record<string, unknown>).terms ?? [])
+        : []
+    if (!Array.isArray(rows)) return []
+    return rows.map((row) => {
+      if (!row || typeof row !== 'object') return null
+      const item = row as Record<string, unknown>
+      const original = String(item.original ?? item.from ?? item.term ?? '').trim()
+      const suggested = String(item.suggested ?? item.to ?? item.correction ?? '').trim()
+      const reason = String(item.reason ?? '').trim()
+      return original && suggested && original !== suggested ? { original, suggested, reason } : null
+    }).filter((item): item is GlossarySuggestion => Boolean(item)).slice(0, 30)
+  } catch {
+    return []
+  }
 }
