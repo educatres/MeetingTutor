@@ -71,6 +71,10 @@ button { cursor: pointer; }
 .reference-list button { border: 0; background: none; color: #a14343; }
 .model-select { margin-top: 14px; max-width: 100%; }
 .output-panel { border-color: #a9c7d4; }
+.output-ready { margin-top: 18px; padding: 16px; border: 1px solid #a9d2bd; border-radius: 9px; background: #f5fcf7; }
+.output-ready-heading { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; color: #38644b; }
+.output-ready-heading strong { font-size: 18px; color: #17633b; }
+.output-ready-heading span { font-size: 13px; }
 .correction-review { margin: 18px 0 0; padding: 16px; border: 1px solid #e0c5c5; border-radius: 9px; background: #fffafa; }
 .correction-review h3 { margin: 0 0 4px; color: #7b3030; }
 .correction-list { display: grid; gap: 10px; margin: 12px 0; }
@@ -85,6 +89,11 @@ button { cursor: pointer; }
 .approved-preview p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .output-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .output-actions button { background: #f3f6f7; border: 1px solid #c5d4db; color: #285268; }
+.output-actions .preview-button { background: #1e6381; border-color: #1e6381; color: #fff; }
+.output-preview { display: grid; gap: 14px; margin-top: 16px; }
+.output-preview section { border: 1px solid #d5e1e6; border-radius: 8px; background: #fff; overflow: hidden; }
+.output-preview h3 { margin: 0; padding: 10px 12px; color: #1e4058; background: #edf5f7; font-size: 15px; }
+.output-preview pre { margin: 0; border: 0; border-radius: 0; max-height: 360px; }
 .preview { margin-top: 16px; }
 .preview summary { cursor: pointer; color: #1d5b75; font-weight: 700; }
 .preview pre { white-space: pre-wrap; background: #f8fafb; border: 1px solid #dbe5e9; padding: 14px; border-radius: 7px; max-height: 300px; overflow: auto; font: 13px/1.6 ui-monospace, Consolas, monospace; }
