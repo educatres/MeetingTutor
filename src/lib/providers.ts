@@ -1,4 +1,4 @@
-import type { GenerationResult, ModelInfo, ProviderConfig, ProviderId } from '../types'
+import type { ModelInfo, ProviderConfig, ProviderId } from '../types'
 
 export const PROVIDERS: Array<{ id: ProviderId; label: string; defaultBaseUrl: string; hint: string }> = [
   { id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', hint: '支援 OpenAI 相容的 models 與 chat/completions。' },
@@ -125,23 +125,6 @@ export async function listModels(config: ProviderConfig): Promise<ModelInfo[]> {
   return sortModels(config, models)
 }
 
-function parseJsonResult(text: string): GenerationResult {
-  const match = text.match(/\{[\s\S]*\}/)
-  if (match) {
-    try {
-      const parsed = JSON.parse(match[0])
-      return {
-        revisedText: String(parsed.revisedText ?? text),
-        changes: Array.isArray(parsed.changes) ? parsed.changes : [],
-        terms: Array.isArray(parsed.terms) ? parsed.terms : [],
-        uncertainties: Array.isArray(parsed.uncertainties) ? parsed.uncertainties : [],
-        evidence: Array.isArray(parsed.evidence) ? parsed.evidence : [],
-      }
-    } catch { /* fall through to safe text result */ }
-  }
-  return { revisedText: text, changes: [], terms: [], uncertainties: ['模型未回傳可解析的結構化 JSON，已保留原始模型輸出。'], evidence: [] }
-}
-
 function responsesText(body: any): string {
   if (typeof body?.output_text === 'string') return body.output_text
   if (!Array.isArray(body?.output)) return ''
@@ -150,7 +133,7 @@ function responsesText(body: any): string {
     .join('')
 }
 
-export async function generateText(config: ProviderConfig, prompt: string, systemPrompt = ''): Promise<GenerationResult> {
+export async function generateText(config: ProviderConfig, prompt: string, systemPrompt = ''): Promise<string> {
   if (!config.apiKey.trim() || !config.modelId) throw new Error('請先測試 API Key 並選擇模型。')
   const model = config.modelId
   const instructions = systemPrompt.trim()
@@ -162,7 +145,8 @@ export async function generateText(config: ProviderConfig, prompt: string, syste
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody),
     }, 120_000))
     const text = body.candidates?.[0]?.content?.parts?.map((part: any) => part.text || '').join('') || ''
-    return parseJsonResult(text)
+    if (!text) throw new Error('模型已回應，但沒有可讀取的文字內容。')
+    return text
   }
   if (config.id === 'cgu' && !config.baseUrl?.trim()) {
     throw new Error('CGU endpoint 未設定，因此未送出資料。')
@@ -178,7 +162,7 @@ export async function generateText(config: ProviderConfig, prompt: string, syste
     }, 120_000))
     const text = responsesText(body)
     if (!text) throw new Error('模型已回應，但沒有可讀取的文字內容。')
-    return parseJsonResult(text)
+    return text
   }
   const messages = instructions
     ? [{ role: 'system', content: instructions }, { role: 'user', content: prompt }]
@@ -194,5 +178,5 @@ export async function generateText(config: ProviderConfig, prompt: string, syste
   }, 120_000))
   const text = body.choices?.[0]?.message?.content || ''
   if (!text) throw new Error('模型已回應，但沒有可讀取的文字內容。')
-  return parseJsonResult(text)
+  return text
 }

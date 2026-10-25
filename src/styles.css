@@ -96,7 +96,11 @@ button { cursor: pointer; }
 .system-prompt-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 9px; color: #637782; font-size: 12px; }
 .system-prompt-meta .secondary { flex: none; padding: 7px 11px; }
 .output-panel { border-color: #a9c7d4; }
-.output-options { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; padding: 12px 14px; border: 1px solid #c8dce5; border-radius: 8px; background: #f7fbfc; }
+.record-template { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid #bdd5df; border-radius: 8px; background: #edf7fa; }
+.record-template > strong { color: #1e4058; }
+.record-template label { display: inline-flex; align-items: center; gap: 6px; color: #285268; font-weight: 700; cursor: pointer; }
+.record-template input { width: 17px; height: 17px; accent-color: #1e6381; }
+.output-options { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0; padding: 12px 14px; border: 1px solid #c8dce5; border-radius: 8px; background: #f7fbfc; }
 .output-options > strong { color: #1e4058; }
 .output-options > span { flex: 1 1 280px; color: #637782; font-size: 13px; }
 .output-options label { display: inline-flex; align-items: center; gap: 6px; color: #285268; font-weight: 700; cursor: pointer; }

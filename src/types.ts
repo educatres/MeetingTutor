@@ -45,14 +45,6 @@ export interface ProviderConfig {
   reasoningEffort?: ReasoningEffort
 }
 
-export interface GenerationResult {
-  revisedText: string
-  changes: Array<{ from: string; to: string; reason: string; confidence: 'high' | 'medium' | 'low' }>
-  terms: Array<{ source: string; suggested: string; status: 'confirmed' | 'candidate' | 'uncertain'; evidence: string[] }>
-  uncertainties: string[]
-  evidence: Array<{ claim: string; source: string }>
-}
-
 export interface MeetingOutput {
   minutes: string
   actions?: string
