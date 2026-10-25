@@ -42,6 +42,8 @@ button { cursor: pointer; }
 .test-preview-notice p { margin: 0; color: #5e410b; line-height: 1.65; }
 .test-preview-hardware { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 11px 13px; border: 1px solid #d9c99f; border-radius: 8px; background: #fffaf0; }
 .test-preview-hardware .hardware-note { flex: 1; color: #6f6250; }
+.hardware-check { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 8px; }
+.test-preview-hardware .hardware-result { margin: 0 !important; max-width: 360px; color: #6f6250; font-size: 13px; text-align: right; }
 .settings-panel-heading { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; padding-right: 38px; }
 .settings-panel-heading h2 { margin: 0 0 4px; color: #1e4058; font-size: 20px; }
 .settings-panel-heading p { margin: 0; font-size: 13px; }
@@ -173,6 +175,7 @@ button { cursor: pointer; }
   .test-preview-panel { padding: 16px; }
   .test-preview-heading { align-items: stretch; flex-direction: column; }
   .test-preview-hardware { align-items: stretch; flex-direction: column; }
+  .hardware-check { align-items: stretch; }
   .settings-panel-heading { align-items: stretch; flex-direction: column; }
   .workspace { width: calc(100% - 20px); margin: 12px auto; }
   .panel { padding: 16px; }
