@@ -9,7 +9,7 @@
 - [開發手冊](docs/02_開發手冊.md)
 - [實施路線圖與驗收計畫](docs/03_實施路線圖與驗收計畫.md)
 
-目前版本是可部署至 GitHub Pages 的靜態前端：以瀏覽器端 Whisper-base（可切換 Whisper-tiny）進行語音轉錄，讓使用者自行提供並測試 OpenAI、xAI／Grok、Google 或 CGU 的 API Key，再以使用者選定的文字模型修飾語句、參照 PDF／文字資料並產出會議文件。CGU base URL 已預設為 `https://air.cgu.edu.tw/cgullmapi/v1`；仍需要確認模型清單格式與 CORS 政策，介面不會把操作頁當成 REST API。
+目前版本是可部署至 GitHub Pages 的靜態前端：以瀏覽器端 Whisper-base（可切換 Whisper-tiny 或 Whisper-medium）進行語音轉錄，讓使用者自行提供並測試 OpenAI、xAI／Grok、Google 或 CGU 的 API Key，再以使用者選定的文字模型修飾語句、參照 PDF／文字資料並產出會議文件。CGU base URL 已預設為 `https://air.cgu.edu.tw/cgullmapi/v1`；仍需要確認模型清單格式與 CORS 政策，介面不會把操作頁當成 REST API。
 
 本機開發：`npm install` → `npm run dev`；發布建置：`npm run build`。GitHub Actions 已設定為推送 `main` 後部署 GitHub Pages。
 

@@ -10,7 +10,7 @@ type WorkerResponse =
 
 let transcriptionWorker: Worker | null = null
 
-function modelForLanguage(language: Language, size: 'tiny' | 'base') {
+function modelForLanguage(language: Language, size: 'tiny' | 'base' | 'medium') {
   return language === 'en' ? `Xenova/whisper-${size}.en` : `Xenova/whisper-${size}`
 }
 
@@ -51,7 +51,7 @@ async function decodeAudio(file: Blob): Promise<Float32Array> {
   }
 }
 
-export async function transcribe(file: Blob, language: Language, size: 'tiny' | 'base', onProgress: (progress: Progress) => void, onSegments?: (segments: TranscriptSegment[]) => void): Promise<TranscriptSegment[]> {
+export async function transcribe(file: Blob, language: Language, size: 'tiny' | 'base' | 'medium', onProgress: (progress: Progress) => void, onSegments?: (segments: TranscriptSegment[]) => void): Promise<TranscriptSegment[]> {
   const audio = await decodeAudio(file)
   const model = modelForLanguage(language, size)
   const worker = getWorker()

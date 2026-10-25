@@ -45,16 +45,15 @@ function formatSeconds(seconds: number) {
 }
 
 type CorrectionDecision = 'keep' | 'accept' | 'custom'
-type ModelOutputBase = { notice: string; minutes: string; actions: string; agenda: string; source: string }
+type ModelOutputBase = { minutes: string; actions: string; agenda: string; source: string }
 type ModelTestStatus = 'idle' | 'testing' | 'available' | 'empty' | 'error'
 type GenerationStatus = { kind: 'working' | 'success' | 'error'; message: string }
-type OutputPreviewTarget = 'notice' | 'minutes' | 'actions' | 'agenda' | 'a4Html'
+type OutputPreviewTarget = 'minutes' | 'actions' | 'agenda' | 'a4Html'
 const OUTPUT_ITEMS: Array<{ key: OutputPreviewTarget; label: string; filename: string; mime: string }> = [
-  { key: 'notice', label: '通知信（純文字）', filename: '01_會後通知信.txt', mime: 'text/plain;charset=utf-8' },
-  { key: 'minutes', label: '完整會議紀錄（純文字）', filename: '02_完整會議紀錄.txt', mime: 'text/plain;charset=utf-8' },
-  { key: 'actions', label: '本次待辦事項（HTML 表格）', filename: '03_本次待辦事項.html', mime: 'text/html;charset=utf-8' },
-  { key: 'agenda', label: '下次會議議程（HTML 表格）', filename: '04_下次會議議程.html', mime: 'text/html;charset=utf-8' },
-  { key: 'a4Html', label: 'A4 HTML', filename: '05_會議成果彙整_A4列印.html', mime: 'text/html;charset=utf-8' },
+  { key: 'minutes', label: '完整會議紀錄（純文字）', filename: '01_完整會議紀錄.txt', mime: 'text/plain;charset=utf-8' },
+  { key: 'actions', label: '本次待辦事項（HTML 表格）', filename: '02_本次待辦事項.html', mime: 'text/html;charset=utf-8' },
+  { key: 'agenda', label: '下次會議議程（HTML 表格）', filename: '03_下次會議議程.html', mime: 'text/html;charset=utf-8' },
+  { key: 'a4Html', label: 'A4 HTML', filename: '04_會議成果彙整_A4列印.html', mime: 'text/html;charset=utf-8' },
 ]
 const SYSTEM_PROMPT_EXAMPLES = [
   { label: '正式會議紀錄', prompt: '請將口語內容整理為正式、精簡的繁體中文，保留原意與各方立場，不新增逐字稿未提及的事實。' },
@@ -73,7 +72,7 @@ function applyCorrectionChoices(result: GenerationResult, decisions: Record<numb
 
 export default function App() {
   const [language, setLanguage] = useState<Language>('zh')
-  const [whisperModel, setWhisperModel] = useState<'tiny' | 'base'>('base')
+  const [whisperModel, setWhisperModel] = useState<'tiny' | 'base' | 'medium'>('base')
   const [audioFile, setAudioFile] = useState<File | null>(null)
   const [transcriptFile, setTranscriptFile] = useState<File | null>(null)
   const [uploadedTranscriptSegments, setUploadedTranscriptSegments] = useState<TranscriptSegment[]>([])
@@ -327,7 +326,6 @@ export default function App() {
       const prompt = createPrompt(segments, references, glossary, language)
       const result = await generateText(config, prompt, systemPrompt)
       const revised = result.revisedText || transcriptText
-      const notice = `主旨：【會後通知】會議名稱待確認｜日期待確認\n\n各位好：\n\n以下為模型整理草稿，請逐項核對原始逐字稿。\n\n一、語句修飾後內容\n${revised}\n\n二、專有名詞／姓名\n${result.terms.map((term) => `• ${term.source} → ${term.suggested}（${term.status}）`).join('\n') || '• 未偵測到可確認詞彙'}\n\n三、待確認事項\n${result.uncertainties.map((item) => `• ${item}`).join('\n') || '• 無'}\n\n本信為草稿，未寄出。`
       const minutes = `會議名稱待確認｜會議紀錄\n\n會議日期／時間：待確認\n地點：未提供\n資料來源：瀏覽器端逐字稿與使用者參考資料\n\n一、修正後逐字稿\n${revised}\n\n二、修訂與來源\n${result.changes.map((change) => `• ${change.from} → ${change.to}：${change.reason}（${change.confidence}）`).join('\n') || '• 模型未提供差異'}\n\n三、決策與理由\n• DEC-DATE-UNKNOWN-01：狀態：未決；請人工確認，不得將模型推測視為正式決議。\n\n四、待確認事項\n${result.uncertainties.map((item) => `• ${item}`).join('\n') || '• 無'}`
       const actions = renderTableHtml(
         '待辦追蹤表',
@@ -342,11 +340,11 @@ export default function App() {
         [['1', '檢閱未決與術語', '會議紀錄者；提供原始資料', '核准或修正決議', 'DEC-DATE-UNKNOWN-01／ACT-DATE-UNKNOWN-01']],
       )
       const source = references.map((reference) => reference.name).join('、') || '未提供'
-      setModelOutputBase({ notice, minutes, actions, agenda, source })
+      setModelOutputBase({ minutes, actions, agenda, source })
       setCorrectionResult(result)
       setCorrectionDecisions(Object.fromEntries(result.changes.map((_, index) => [index, 'accept' as const])))
       setCustomCorrections({})
-      setOutput({ notice, minutes, actions, agenda, a4Html: renderA4Html(notice, minutes, actions, agenda, source) })
+      setOutput({ minutes, actions, agenda, a4Html: renderA4Html(minutes, actions, agenda, source) })
       const message = '整理完成，可直接預覽或下載會議成果。'
       setGenerationStatus({ kind: 'success', message })
       setStatus(message)
@@ -364,9 +362,8 @@ export default function App() {
   const applyCorrectionsToOutput = () => {
     if (!output || !modelOutputBase || !correctionResult) return
     const replaceRevision = (text: string) => text.replace(correctionResult.revisedText, approvedCorrectionText)
-    const notice = replaceRevision(modelOutputBase.notice)
     const minutes = replaceRevision(modelOutputBase.minutes)
-    setOutput({ ...output, notice, minutes, a4Html: renderA4Html(notice, minutes, modelOutputBase.actions, modelOutputBase.agenda, modelOutputBase.source) })
+    setOutput({ ...output, minutes, a4Html: renderA4Html(minutes, modelOutputBase.actions, modelOutputBase.agenda, modelOutputBase.source) })
     setStatus('已將文字校正選擇套用到匯出草稿。')
   }
 
@@ -378,7 +375,7 @@ export default function App() {
 
     <main className="workspace">
       <section className="panel"><div className="section-heading"><span className="step">1</span><div><h2>取得音訊</h2><p>轉寫語言預設為中文，也可選擇英文。</p></div></div>
-        <div className="controls-row"><label className="field"><span>轉寫語言</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} disabled={busy}><option value="zh">中文（繁體／多語模型）</option><option value="en">English（英文模型）</option></select></label><label className="field"><span>Whisper 模型</span><select value={whisperModel} onChange={(event) => setWhisperModel(event.target.value as 'tiny' | 'base')} disabled={busy}><option value="base">Whisper-base（預設，較準確）</option><option value="tiny">Whisper-tiny（較快、較省資源）</option></select></label><label className="file-picker"><span>選擇音訊</span><input type="file" accept="audio/*,video/*" onChange={onAudioChange} disabled={busy} /></label><button className="secondary" onClick={recording ? stopRecording : startRecording} disabled={busy}>{recording ? '停止錄音' : '開始錄音'}</button></div>
+        <div className="controls-row"><label className="field"><span>轉寫語言</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} disabled={busy}><option value="zh">中文（繁體／多語模型）</option><option value="en">English（英文模型）</option></select></label><label className="field"><span>Whisper 模型</span><select value={whisperModel} onChange={(event) => setWhisperModel(event.target.value as 'tiny' | 'base' | 'medium')} disabled={busy}><option value="medium">Whisper-medium（最準確、需要較多記憶體）</option><option value="base">Whisper-base（預設，較準確）</option><option value="tiny">Whisper-tiny（較快、較省資源）</option></select></label><label className="file-picker"><span>選擇音訊</span><input type="file" accept="audio/*,video/*" onChange={onAudioChange} disabled={busy} /></label><button className="secondary" onClick={recording ? stopRecording : startRecording} disabled={busy}>{recording ? '停止錄音' : '開始錄音'}</button></div>
         <div className="controls-row transcript-upload-row"><label className="file-picker wide"><span>或上傳 Teams 逐字稿（.vtt／.txt／.srt）</span><input type="file" accept=".vtt,.txt,.srt,text/vtt,text/plain" onChange={onTranscriptChange} disabled={busy} /></label></div>
         {audioFile && <p className="file-note">已準備：{audioFile.name}（{Math.round(audioFile.size / 1024)} KB）</p>}
         {transcriptFile && <p className="file-note">已準備 Teams 逐字稿：{transcriptFile.name}（{uploadedTranscriptSegments.length} 段）</p>}

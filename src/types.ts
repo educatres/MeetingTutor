@@ -54,7 +54,6 @@ export interface GenerationResult {
 }
 
 export interface MeetingOutput {
-  notice: string
   minutes: string
   actions: string
   agenda: string
