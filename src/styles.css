@@ -153,6 +153,7 @@ button { cursor: pointer; }
 .output-options > span { flex: 1 1 280px; color: #637782; font-size: 13px; }
 .output-options label { display: inline-flex; align-items: center; gap: 6px; color: #285268; font-weight: 700; cursor: pointer; }
 .output-options input { width: 17px; height: 17px; accent-color: #1e6381; }
+.output-option-list { display: flex; flex: 1 1 100%; align-items: center; gap: 12px; flex-wrap: wrap; }
 .generation-status { margin: 12px 0 0; padding: 11px 13px; border: 1px solid transparent; border-radius: 8px; font-size: 14px; }
 .generation-status.is-working { color: #285268; background: #edf6f9; border-color: #b8d5e0; }
 .generation-status.is-success { color: #17633b; background: #edf9f1; border-color: #a9d2bd; }
