@@ -56,4 +56,6 @@ export interface MeetingOutput {
   minutes: string
   actions?: string
   agenda?: string
+  workgroupSummary?: string
+  announcementEmail?: string
 }

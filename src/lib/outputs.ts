@@ -132,6 +132,20 @@ export function createPrompt(segments: TranscriptSegment[], references: Referenc
   return `你是專業的紀錄整理人員。只根據逐字稿、已確認詞彙與參考資料工作，不得虛構姓名、日期、期限、決議、作業或理由。不確定的內容請明確寫「待確認」，不要自行推測。移除口頭贅詞、重複語句與無意義停頓，但保留原意、重要細節、不同觀點與脈絡。輸出語言必須是${outputLanguage}。\n\n${template}\n\n請直接輸出最終純文字文件，不要輸出 JSON、XML、HTML、Markdown、程式碼框、欄位代碼、分析過程、前言或結語。標題使用一般文字，清單使用「•」或中文編號。不要附上原始逐字稿全文。若逐字稿沒有明確的待辦事項或後續安排，對應段落只寫「無」，不得自行補造。\n\n使用者確認詞彙：\n${terms}\n\n參考資料：\n${refs}\n\n逐字稿：\n${transcriptForPrompt(segments)}`
 }
 
+function meetingOutputForPrompt(minutes: string) {
+  return minutes.slice(0, 16_000)
+}
+
+export function createWorkgroupSummaryPrompt(minutes: string, language: Language) {
+  const outputLanguage = language === 'zh' ? '繁體中文' : '英文'
+  return `你是專業的會議溝通文案。請根據以下已整理好的會議記錄摘要，寫一段適合貼到公司或工作群組的會議記錄摘要，輸出語言為${outputLanguage}。${language === 'zh' ? '中文約 100 字（可落在 80～120 字），' : '請控制在約 70～100 個英文單字，'}讓成員能快速掌握會議重點、重要決議與後續行動。只可使用摘要中明確出現的資訊，不得虛構人名、日期、數字、期限或結論；若沒有待辦事項，不要自行補造。語氣清楚、精簡、自然，適合直接貼上，不要稱呼、標題、Markdown、引號、分析過程或結語，只輸出訊息正文。\n\n已整理好的會議記錄摘要：\n${meetingOutputForPrompt(minutes)}`
+}
+
+export function createAnnouncementEmailPrompt(minutes: string, language: Language) {
+  const outputLanguage = language === 'zh' ? '繁體中文' : '英文'
+  return `你是專業的行政溝通文案。請根據以下已整理好的會議記錄摘要，寫一封可直接寄出的會議紀錄公告信，輸出語言為${outputLanguage}。內容要包含清楚的主旨、簡短禮貌的正文，說明會議摘要已整理完成並以附件提供，並在信末列出「附件：會議記錄摘要」。只可使用摘要中明確出現的資訊，不得虛構人名、日期、決議或期限；不確定的內容請省略，不要自行推測。請輸出純文字，格式為第一行主旨、空一行後接信件正文；不要輸出 Markdown、程式碼框、分析過程或額外說明。\n\n已整理好的會議記錄摘要：\n${meetingOutputForPrompt(minutes)}`
+}
+
 export function createGlossaryPrompt(segments: TranscriptSegment[], glossary: GlossaryTerm[], language: Language) {
   const existing = glossary.map((term) => `${term.canonical}${term.aliases ? `（別名：${term.aliases}）` : ''}`).join('、') || '（目前沒有既有詞彙）'
   const outputLanguage = language === 'zh' ? '繁體中文' : '英文'

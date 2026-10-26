@@ -4,7 +4,7 @@ import './styles.css'
 import type { GlossarySuggestion, GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, RecordTemplate, ReferenceDocument, TranscriptSegment } from './types'
 import { PROVIDERS, generateText, isAllowedTextModel, listModels, providerLabel } from './lib/providers'
 import { readReference } from './lib/references'
-import { cleanPlainTextOutput, createGlossaryPrompt, createPolishedTranscriptPrompt, createPrompt, extractPlainTextSection, parseGlossarySuggestions, parsePolishedTranscript } from './lib/outputs'
+import { cleanPlainTextOutput, createAnnouncementEmailPrompt, createGlossaryPrompt, createPolishedTranscriptPrompt, createPrompt, createWorkgroupSummaryPrompt, extractPlainTextSection, parseGlossarySuggestions, parsePolishedTranscript } from './lib/outputs'
 import { transcribe } from './lib/transcription'
 import { parseTeamsTranscript } from './lib/transcript'
 
@@ -138,6 +138,8 @@ export default function App() {
   const [generatedTemplate, setGeneratedTemplate] = useState<RecordTemplate>('meeting')
   const [includeActions, setIncludeActions] = useState(false)
   const [includeAgenda, setIncludeAgenda] = useState(false)
+  const [includeWorkgroupSummary, setIncludeWorkgroupSummary] = useState(false)
+  const [includeAnnouncementEmail, setIncludeAnnouncementEmail] = useState(false)
   const [templateHelpOpen, setTemplateHelpOpen] = useState(false)
   const [hardwareResult, setHardwareResult] = useState<string | null>(null)
   const [showKey, setShowKey] = useState(false)
@@ -411,6 +413,8 @@ export default function App() {
     if (template !== 'meeting') {
       setIncludeActions(false)
       setIncludeAgenda(false)
+      setIncludeWorkgroupSummary(false)
+      setIncludeAnnouncementEmail(false)
     }
   }
 
@@ -443,17 +447,24 @@ export default function App() {
       const prompt = createPrompt(segments, references, glossary, language, recordTemplate)
       const generatedText = await generateText(config, prompt, systemPrompt)
       const minutes = cleanPlainTextOutput(generatedText || transcriptText)
-      let polished = segments
-      try {
-        const polishedResponse = await generateText(config, createPolishedTranscriptPrompt(segments, language), systemPrompt)
-        polished = parsePolishedTranscript(polishedResponse, segments)
-      } catch {
-        polished = segments
+      const optionalText = async (request: string) => {
+        try {
+          const response = await generateText(config, request, systemPrompt)
+          return cleanPlainTextOutput(response) || undefined
+        } catch {
+          return undefined
+        }
       }
+      const [polishedResponse, workgroupSummary, announcementEmail] = await Promise.all([
+        generateText(config, createPolishedTranscriptPrompt(segments, language), systemPrompt).catch(() => ''),
+        includeWorkgroupSummary ? optionalText(createWorkgroupSummaryPrompt(minutes, language)) : Promise.resolve(undefined),
+        includeAnnouncementEmail ? optionalText(createAnnouncementEmailPrompt(minutes, language)) : Promise.resolve(undefined),
+      ])
+      const polished = polishedResponse ? parsePolishedTranscript(polishedResponse, segments) : segments
       setPolishedSegments(polished)
       const actions = includeActions ? extractPlainTextSection(minutes, ['待辦事項', '待辦', '行動項目']) || undefined : undefined
       const agenda = includeAgenda ? extractPlainTextSection(minutes, ['下次會議議程', '下次議程', '後續安排']) || undefined : undefined
-      setOutput({ minutes, actions, agenda })
+      setOutput({ minutes, actions, agenda, workgroupSummary, announcementEmail })
       setGeneratedTemplate(recordTemplate)
       const message = '整理完成，成果已直接顯示在下方。'
       setGenerationStatus({ kind: 'success', message })
@@ -529,12 +540,12 @@ export default function App() {
           <div className="system-prompt-examples"><span>快速範例（可複選，點擊後追加）</span><div>{SYSTEM_PROMPT_EXAMPLES.map((example) => <button type="button" key={example.label} onClick={() => addSystemPromptExample(example)} disabled={busy || systemPrompt.includes(example.prompt)} title={example.prompt}>{example.label}</button>)}</div></div>
           <div className="system-prompt-meta"><span>自動保存在此瀏覽器，重新整理後仍會保留。{systemPrompt.length.toLocaleString()} / 6,000 字</span><button type="button" className="secondary" onClick={() => setSystemPrompt('')} disabled={busy || !systemPrompt}>清除指示</button></div>
         </div>
-        {recordTemplate === 'meeting' && <div className="output-options"><strong>選擇額外輸出</strong><span>待辦事項與下次議程會由 AI 根據會議記錄內容整理成純文字；找不到內容時不顯示。</span><label><input type="checkbox" checked={includeActions} onChange={(event) => setIncludeActions(event.target.checked)} disabled={busy} />輸出待辦事項</label><label><input type="checkbox" checked={includeAgenda} onChange={(event) => setIncludeAgenda(event.target.checked)} disabled={busy} />輸出下次議程</label></div>}
+        {recordTemplate === 'meeting' && <div className="output-options"><strong>選擇額外輸出</strong><span>勾選後會由 AI 根據會議記錄摘要產生可直接使用的文字；找不到內容時不顯示。</span><label><input type="checkbox" checked={includeActions} onChange={(event) => setIncludeActions(event.target.checked)} disabled={busy} />輸出待辦事項</label><label><input type="checkbox" checked={includeAgenda} onChange={(event) => setIncludeAgenda(event.target.checked)} disabled={busy} />輸出下次議程</label><label><input type="checkbox" checked={includeWorkgroupSummary} onChange={(event) => setIncludeWorkgroupSummary(event.target.checked)} disabled={busy} />工作群組會議摘要（約 100 字）</label><label><input type="checkbox" checked={includeAnnouncementEmail} onChange={(event) => setIncludeAnnouncementEmail(event.target.checked)} disabled={busy} />公告信件（含摘要附件）</label></div>}
         <div className="action-row-centered"><button className="primary" onClick={generate} disabled={busy}>{generationStatus?.kind === 'working' ? '整理中…' : recordTemplateLabel(recordTemplate)}</button></div>
         {generationStatus && <p className={`generation-status is-${generationStatus.kind}`} role={generationStatus.kind === 'error' ? 'alert' : 'status'}>{generationStatus.message}</p>}
         {output && <div className="output-ready" role="status" ref={outputResultRef}>
           <div className="output-ready-heading"><strong>整理完成</strong><span>結果已直接顯示於下方。</span></div>
-          <div className="output-results"><section className="output-result"><h3>{recordTemplateLabel(generatedTemplate)}</h3><pre>{output.minutes}</pre></section>{output.actions && <section className="output-result"><h3>本次待辦事項</h3><pre>{output.actions}</pre></section>}{output.agenda && <section className="output-result"><h3>下次會議議程</h3><pre>{output.agenda}</pre></section>}{polishedSegments.length > 0 && <section className="output-result polished-transcript-result"><div className="polished-transcript-heading"><div><h3>文字潤飾後逐字稿</h3><p>保留原始時間標記，可直接下載為 YouTube 字幕 SRT 檔。</p></div><button className="secondary" type="button" onClick={downloadPolishedTranscript}>下載 YouTube 字幕（SRT）</button></div><div className="polished-transcript-list">{polishedSegments.map((segment, index) => { const nextStart = polishedSegments[index + 1]?.start; const end = segment.end > segment.start ? segment.end : (typeof nextStart === 'number' && nextStart > segment.start ? nextStart : segment.start + 2); return <div className="polished-transcript-row" key={segment.id}><span className="polished-transcript-time">{formatSrtTime(segment.start)} → {formatSrtTime(end)}</span><span>{segment.text}</span></div> })}</div></section>}</div>
+          <div className="output-results"><section className="output-result"><h3>{recordTemplateLabel(generatedTemplate)}</h3><pre>{output.minutes}</pre></section>{output.actions && <section className="output-result"><h3>本次待辦事項</h3><pre>{output.actions}</pre></section>}{output.agenda && <section className="output-result"><h3>下次會議議程</h3><pre>{output.agenda}</pre></section>}{output.workgroupSummary && <section className="output-result"><h3>工作群組會議摘要</h3><pre>{output.workgroupSummary}</pre></section>}{output.announcementEmail && <section className="output-result"><h3>公告信件（含摘要附件）</h3><pre>{output.announcementEmail}</pre></section>}{polishedSegments.length > 0 && <section className="output-result polished-transcript-result"><div className="polished-transcript-heading"><div><h3>文字潤飾後逐字稿</h3><p>保留原始時間標記，可直接下載為 YouTube 字幕 SRT 檔。</p></div><button className="secondary" type="button" onClick={downloadPolishedTranscript}>下載 YouTube 字幕（SRT）</button></div><div className="polished-transcript-list">{polishedSegments.map((segment, index) => { const nextStart = polishedSegments[index + 1]?.start; const end = segment.end > segment.start ? segment.end : (typeof nextStart === 'number' && nextStart > segment.start ? nextStart : segment.start + 2); return <div className="polished-transcript-row" key={segment.id}><span className="polished-transcript-time">{formatSrtTime(segment.start)} → {formatSrtTime(end)}</span><span>{segment.text}</span></div> })}</div></section>}</div>
         </div>}
       </section>
     </main>
