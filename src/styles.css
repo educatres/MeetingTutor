@@ -56,6 +56,10 @@ button { cursor: pointer; }
 .section-heading > .test-preview-toggle { margin-left: auto; flex: none; }
 .section-heading h2 { font-size: 20px; margin: 0 0 4px; color: #1e4058; }
 .section-heading p { margin: 0; color: #667783; font-size: 14px; }
+.meeting-admin-help { margin: 0 0 18px; padding: 15px 17px; border: 1px solid #c4d8e4; border-left: 4px solid #2f7898; border-radius: 9px; background: #f2f8fa; color: #3d5663; }
+.meeting-admin-help h3 { margin: 0 0 6px; color: #1e526b; font-size: 16px; }
+.meeting-admin-help p { margin: 0; font-size: 14px; line-height: 1.7; }
+.meeting-admin-help code { padding: 1px 4px; border-radius: 4px; background: #e1eef3; color: #1e526b; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .95em; }
 .step { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #dbeaf2; color: #1f5570; font-weight: 800; flex: none; }
 .controls-row, .provider-grid, .glossary-form { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
 .action-row-centered { display: flex; justify-content: center; margin-top: 12px; }

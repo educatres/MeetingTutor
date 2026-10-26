@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Microsoft Teams 錄製會議與下載 .vtt 逐字稿｜MeetingTutor 操作說明</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 14mm 13mm 15mm;
+    }
+
+    :root {
+      --ink: #1f2937;
+      --muted: #5b6573;
+      --blue: #3457a6;
+      --blue-soft: #eef3ff;
+      --purple: #5b4bb7;
+      --purple-soft: #f2efff;
+      --red: #c43a3a;
+      --line: #d9dee8;
+      --paper: #ffffff;
+      --bg: #f4f6fa;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { background: var(--bg); }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.7;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .document {
+      max-width: 186mm;
+      margin: 0 auto;
+      background: var(--paper);
+    }
+
+    .cover {
+      padding: 17mm 0 10mm;
+      border-bottom: 3px solid var(--blue);
+    }
+
+    .eyebrow {
+      margin: 0 0 3mm;
+      color: var(--blue);
+      font-size: 9pt;
+      font-weight: 700;
+      letter-spacing: .12em;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      margin-bottom: 3mm;
+      color: #172554;
+      font-size: 25pt;
+      line-height: 1.25;
+      letter-spacing: .01em;
+    }
+
+    .subtitle {
+      margin-bottom: 7mm;
+      color: var(--muted);
+      font-size: 11.5pt;
+    }
+
+    .intro {
+      padding: 5mm 6mm;
+      border: 1px solid #cfd8ef;
+      border-left: 5px solid var(--purple);
+      border-radius: 8px;
+      background: var(--purple-soft);
+    }
+
+    .intro h2 {
+      margin-bottom: 2mm;
+      color: #40368a;
+      font-size: 13.5pt;
+    }
+
+    .intro p { margin-bottom: 0; }
+
+    .quick-guide {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4mm;
+      margin: 7mm 0 0;
+    }
+
+    .quick-guide div {
+      padding: 3.5mm 4mm;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fbfcff;
+    }
+
+    .quick-guide strong {
+      display: block;
+      margin-bottom: 1mm;
+      color: var(--blue);
+      font-size: 11pt;
+    }
+
+    .section {
+      padding-top: 9mm;
+    }
+
+    .section + .section {
+      margin-top: 7mm;
+      border-top: 1px solid var(--line);
+    }
+
+    .section-title {
+      display: flex;
+      align-items: baseline;
+      gap: 3mm;
+      margin-bottom: 2mm;
+      color: #172554;
+      font-size: 17pt;
+      line-height: 1.35;
+    }
+
+    .section-title .num {
+      color: var(--blue);
+      font-size: 11pt;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+
+    .section-lead {
+      margin-bottom: 5mm;
+      color: var(--muted);
+    }
+
+    .step {
+      margin: 0 0 8mm;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .step-heading {
+      display: flex;
+      align-items: flex-start;
+      gap: 3mm;
+      margin-bottom: 2.5mm;
+    }
+
+    .step-number {
+      flex: 0 0 8mm;
+      width: 8mm;
+      height: 8mm;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--blue);
+      font-size: 11pt;
+      font-weight: 800;
+      line-height: 8mm;
+      text-align: center;
+    }
+
+    .step h3 {
+      margin: .5mm 0 0;
+      font-size: 13pt;
+      line-height: 1.4;
+    }
+
+    .step p {
+      margin: 0 0 3mm 11mm;
+      color: var(--muted);
+    }
+
+    figure {
+      margin: 0 0 0 11mm;
+      padding: 3mm;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      box-shadow: 0 1px 5px rgba(25, 45, 85, .08);
+    }
+
+    figure img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 3px;
+    }
+
+    figcaption {
+      margin-top: 2.5mm;
+      color: var(--muted);
+      font-size: 8.8pt;
+      line-height: 1.45;
+    }
+
+    .callout {
+      margin: 5mm 0 0;
+      padding: 4mm 5mm;
+      border: 1px solid #efcaca;
+      border-left: 4px solid var(--red);
+      border-radius: 7px;
+      background: #fff7f7;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .callout strong { color: var(--red); }
+
+    .handoff {
+      margin-top: 7mm;
+      padding: 5mm 6mm;
+      border: 1px solid #c8d7f3;
+      border-radius: 8px;
+      background: var(--blue-soft);
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .handoff h2 {
+      margin-bottom: 2mm;
+      color: #254382;
+      font-size: 14pt;
+    }
+
+    .handoff ol {
+      margin: 2mm 0 0 5mm;
+      padding-left: 5mm;
+    }
+
+    .checklist {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2mm 8mm;
+      margin: 3mm 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .checklist li::before {
+      content: "□";
+      display: inline-block;
+      margin-right: 2mm;
+      color: var(--blue);
+      font-size: 13pt;
+      vertical-align: -.05em;
+    }
+
+    .footer {
+      margin-top: 10mm;
+      padding-top: 3mm;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 8.5pt;
+      text-align: center;
+    }
+
+    code {
+      padding: .1em .35em;
+      border-radius: 4px;
+      background: #eef1f6;
+      color: #27344d;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: .95em;
+    }
+
+    @media print {
+      html, body { background: #fff; }
+      .document { max-width: none; }
+      .cover { padding-top: 0; }
+      figure { box-shadow: none; }
+      a { color: inherit; text-decoration: none; }
+    }
+
+    @media screen and (max-width: 760px) {
+      .document { padding: 0 5vw 8vw; }
+      .quick-guide, .checklist { grid-template-columns: 1fr; }
+      figure, .step p { margin-left: 0; }
+      h1 { font-size: 21pt; }
+    }
+  </style>
+</head>
+<body>
+  <main class="document">
+    <header class="cover">
+      <p class="eyebrow">MEETINGTUTOR｜行政人員操作說明</p>
+      <h1>Microsoft Teams 錄製會議<br>與下載 <code>.vtt</code> 逐字稿</h1>
+      <p class="subtitle">依照下方截圖操作，即可取得可交由 MeetingTutor 整理的逐字稿檔案。</p>
+
+      <section class="intro" aria-labelledby="intro-title">
+        <h2 id="intro-title">先了解：MeetingTutor 可以幫您做什麼？</h2>
+        <p>MeetingTutor 能將會議或課程的逐字稿交由 AI 進一步整理：先修飾轉錄中可能不完整、不通順的詞語與句子，再搭配與會者姓名、專有名詞、會議通知、會議資料或講義等補充資料，讓內容更容易閱讀與核對；接著也能自動撰寫會議／上課摘要。請先使用會議錄製軟體（例如 Microsoft Teams）錄下會議並產出逐字稿，再將逐字稿交給本系統處理。</p>
+        <p>您也可以在系統中自訂範本與提示詞，事先寫好希望 AI 如何整理，例如：盡量保留逐字內容、從逐字稿判斷工作項目與爭議項目，或依照指定格式撰寫會議紀錄通知信。只要把整理方向說清楚，就能交由 AI 協助完成。</p>
+      </section>
+
+      <div class="quick-guide" aria-label="操作流程摘要">
+        <div><strong>① Teams 錄製</strong>在會議中開始錄製與謄寫。</div>
+        <div><strong>② Teams 下載</strong>從會議回顧頁下載 <code>.vtt</code>。</div>
+        <div><strong>③ MeetingTutor 整理</strong>上傳逐字稿與補充資料，套用需求。</div>
+      </div>
+    </header>
+
+    <section class="section" aria-labelledby="record-title">
+      <h2 class="section-title" id="record-title"><span class="num">第一部分</span>在 Teams 錄製會議並產生逐字稿</h2>
+      <p class="section-lead">以下 4 張截圖依序說明：開啟即時會議、開始錄製／謄寫、選擇語言，以及確認功能已啟用。</p>
+
+      <article class="step">
+        <div class="step-heading"><span class="step-number">1</span><h3>開啟 Teams 行事曆，點選「立即開會」</h3></div>
+        <p>在 Teams 左側工具列點選「行事曆」，再於右上角點選「立即開會」，進入會議畫面。</p>
+        <figure>
+          <img src="Teams 錄製會議記錄與轉寫字幕/1.點開左邊工具列的行事曆，右上角點開立即開會.png" alt="Teams 行事曆畫面，紅色箭頭標示行事曆與立即開會">
+          <figcaption>圖 1｜紅色標註指出左側「行事曆」與右上角「立即開會」的位置。</figcaption>
+        </figure>
+      </article>
+
+      <article class="step">
+        <div class="step-heading"><span class="step-number">2</span><h3>從「其他」開啟「錄製及轉錄」，開始錄製</h3></div>
+        <p>進入會議後，點選右上角「其他（…）」→「錄製及轉錄」→「開始錄製」。若只需要逐字稿、不需要錄音錄影，也可以選擇「開始謄寫」。</p>
+        <figure>
+          <img src="Teams 錄製會議記錄與轉寫字幕/2進入會議後，右上角選單點選 其他，錄製及轉錄，開始錄製 （也可以點開始謄寫，就不會錄音錄影，但會逐字稿）.png" alt="Teams 其他選單中的錄製及轉錄與開始錄製選項">
+          <figcaption>圖 2｜依紅色箭頭開啟「其他」及「錄製及轉錄」，再選「開始錄製」；也可選「開始謄寫」。</figcaption>
+        </figure>
+      </article>
+
+      <article class="step">
+        <div class="step-heading"><span class="step-number">3</span><h3>選擇會議使用的語言</h3></div>
+        <p>依畫面提示選擇正確的口語語言，例如「繁體中文（台灣）」或英文，再按「確認」。語言選擇正確，後續逐字稿辨識會比較準確。</p>
+        <figure>
+          <img src="Teams 錄製會議記錄與轉寫字幕/3選擇語言（可選中文或英文）.png" alt="Teams 選擇語言對話框，顯示繁體中文（台灣）">
+          <figcaption>圖 3｜紅色標註提醒選擇語言；畫面示例為「繁體中文（台灣）」。</figcaption>
+        </figure>
+      </article>
+
+      <article class="step">
+        <div class="step-heading"><span class="step-number">4</span><h3>確認「停止錄製／停止謄寫」已出現</h3></div>
+        <p>再次開啟「其他」→「錄製及轉錄」。如果選單中已顯示「停止錄製」與「停止謄寫」，代表錄製與逐字稿功能已經開始；會議結束後再依單位規定停止或離開會議。</p>
+        <figure>
+          <img src="Teams 錄製會議記錄與轉寫字幕/4右上角選單點選 其他，錄製及轉錄，即可看到已經開始錄製與謄寫.png" alt="Teams 錄製及轉錄選單顯示停止錄製與停止謄寫">
+          <figcaption>圖 4｜紅色框線標示「錄製及轉錄」以及「停止錄製／停止謄寫」，表示功能已啟動。</figcaption>
+        </figure>
+      </article>
+
+      <div class="callout"><strong>小提醒：</strong>若只看到「開始錄製」或「開始謄寫」，請依第 2 步重新操作；若已看到「停止錄製／停止謄寫」，就不需要再次開始。</div>
+    </section>
+
+    <section class="section" aria-labelledby="download-title">
+      <h2 class="section-title" id="download-title"><span class="num">第二部分</span>從 Teams 下載 <code>.vtt</code> 逐字稿</h2>
+      <p class="section-lead">會議結束、檔案完成處理後，依下列 3 張截圖找到會議回顧頁與文字記錄，再下載適合系統處理的 <code>.vtt</code> 格式。</p>
+
+      <article class="step">
+        <div class="step-heading"><span class="step-number">1</span><h3>點開會議影片、錄音與謄寫紀錄</h3></div>
+        <p>在 Teams 的團隊／頻道或會議紀錄中，找到該場會議，點開會議影片、錄音與謄寫紀錄的回顧頁。</p>
+        <figure>
+          <img src="Teams下載逐字稿說明/1點開您的會議影片錄音謄寫紀錄.png" alt="Teams 頻道中的會議回顧卡片與會議影片">
+          <figcaption>圖 5｜紅色箭頭指向會議回顧卡片中的會議影片／錄音，點開後進入會議內容頁。</figcaption>
+        </figure>
+      </article>
+
+      <article class="step">
+        <div class="step-heading"><span class="step-number">2</span><h3>在右側選擇「文字記錄」</h3></div>
+        <p>開啟會議回顧頁後，在右側分頁列點選「文字記錄」，切換到逐字稿內容。</p>
+        <figure>
+          <img src="Teams下載逐字稿說明/2右上角有文字記錄按鈕.png" alt="Teams 會議回顧頁右側分頁列中的文字記錄按鈕">
+          <figcaption>圖 6｜紅色箭頭指向右側分頁列的「文字記錄」按鈕。</figcaption>
+        </figure>
+      </article>
+
+      <article class="step">
+        <div class="step-heading"><span class="step-number">3</span><h3>點選「下載」→「下載為 .vtt」</h3></div>
+        <p>在「文字記錄」頁面按「下載」，再選擇「下載為 .vtt」。請優先使用 <code>.vtt</code> 檔案交給 MeetingTutor，方便系統保留時間軸並進行後續處理。</p>
+        <figure>
+          <img src="Teams下載逐字稿說明/3點下載為.vtt(為方便系統處理，請下載vtt格式).png" alt="Teams 文字記錄頁的下載選單，紅色箭頭指向下載為 vtt">
+          <figcaption>圖 7｜紅色箭頭指向「下載為 .vtt」；請不要選錯成 .docx。</figcaption>
+        </figure>
+      </article>
+    </section>
+
+    <section class="handoff" aria-labelledby="handoff-title">
+      <h2 id="handoff-title">下載完成後，交給 MeetingTutor 整理</h2>
+      <p>將剛下載的 <code>.vtt</code> 逐字稿上傳至 MeetingTutor，再依需要補充資料與整理方向：</p>
+      <ol>
+        <li>提供與會者姓名、專有名詞、會議通知、會議資料或講義等參考資料。</li>
+        <li>選擇或建立範本，並貼上希望 AI 遵循的提示詞／整理要求。</li>
+        <li>確認輸出格式（例如摘要、工作項目、爭議項目或會議通知信）後送出處理。</li>
+      </ol>
+      <ul class="checklist" aria-label="交件前檢查清單">
+        <li>檔案副檔名是 .vtt</li>
+        <li>語言選擇符合會議內容</li>
+        <li>會議錄製／謄寫已確實啟動</li>
+        <li>補充資料與整理需求已備妥</li>
+      </ul>
+    </section>
+
+    <footer class="footer">MeetingTutor｜Microsoft Teams 逐字稿下載步驟｜列印時請選擇 A4、直向、比例 100%</footer>
+  </main>
+</body>
+</html>
