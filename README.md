@@ -19,6 +19,10 @@
 
 到 repository 的 **Settings → Pages → Build and deployment → Source** 選擇 **GitHub Actions**，再重新推送或在 Actions 手動執行 `Deploy to GitHub Pages`。目前若尚未啟用 Pages，workflow 的 `Configure Pages` 會失敗，但前面的依賴安裝與 production build 仍會通過。
 
+## 授權
+
+本 README、docs/ 文件、說明文字與專案圖片等文字及視覺內容，採用 [Creative Commons 姓名標示 4.0 國際授權條款（CC BY 4.0）](https://creativecommons.org/licenses/by/4.0/deed.zh_TW)。使用、改作或再散布時，請保留作者與來源標示，並附上授權條款連結。程式碼、第三方套件與外部服務素材不在此授權範圍內，除非另有明確標示。
+
 ## MVP 已知限制
 
 - CGU 已預設 base URL，但仍需要確認模型清單格式與 CORS 政策；若呼叫不符合正式契約，介面會拒絕假成功。
