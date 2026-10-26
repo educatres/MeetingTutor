@@ -488,7 +488,7 @@ export default function App() {
             <h2 id="meeting-admin-help-title">MeetingTutor 如何協助行政會議整理？</h2>
             <p>先用 Microsoft Teams 錄製會議並下載 <code>.vtt</code> 逐字稿，再交給 MeetingTutor。系統可以依照與會者姓名、專有名詞、會議通知、會議資料或講義修正轉錄內容，並由 AI 整理會議摘要、決議、工作項目與爭議項目。您也能自訂範本與提示詞，例如要求保留逐字稿、指定整理格式，或產出會議紀錄通知信，讓行政整理更快、更一致。</p>
           </div>
-          <a className="meeting-guide-button" href="./docs/Teams逐字稿下載步驟/Teams逐字稿操作說明.html" target="_blank" rel="noreferrer">查看 Teams 錄製與逐字稿操作說明</a>
+          <a className="meeting-guide-button" href="./teams-transcript-guide/index.html" target="_blank" rel="noreferrer">查看 Teams 錄製與逐字稿操作說明</a>
         </div>
       </section>
 
