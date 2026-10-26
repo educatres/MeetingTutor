@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MeetingTutor 使用說明｜OO系校慶攤位會議</title>
+  <style>
+    :root {
+      --ink: #243746;
+      --muted: #607584;
+      --teal: #176b82;
+      --teal-light: #eaf5f8;
+      --line: #c8dce3;
+      --orange: #e38b2d;
+      --orange-light: #fff5e6;
+      --red: #b63737;
+      --red-light: #fff2f2;
+      --green: #2d7a58;
+      --green-light: #eef9f2;
+    }
+
+    @page { size: A4; margin: 13mm 14mm 14mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #eef3f5;
+      font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+      line-height: 1.55;
+      font-size: 10.5pt;
+    }
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto 10mm;
+      padding: 0;
+      background: #fff;
+    }
+    .page + .page { padding-top: 1mm; }
+    .cover {
+      border-bottom: 2px solid var(--teal);
+      padding-bottom: 8mm;
+      margin-bottom: 6mm;
+    }
+    .eyebrow {
+      color: var(--teal);
+      font-weight: 800;
+      letter-spacing: .12em;
+      font-size: 9pt;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 1mm 0 1mm;
+      color: #173e52;
+      font-size: 26pt;
+      line-height: 1.2;
+      letter-spacing: .02em;
+    }
+    h2 {
+      margin: 5mm 0 2.5mm;
+      color: #1d566b;
+      font-size: 15pt;
+      line-height: 1.25;
+      border-left: 4px solid var(--orange);
+      padding-left: 8px;
+    }
+    h3 { margin: 0 0 1.5mm; font-size: 11.5pt; color: #1d566b; }
+    p { margin: 1.5mm 0; }
+    .lead { color: var(--muted); font-size: 11.5pt; margin-top: 0; }
+    .scenario {
+      display: grid;
+      grid-template-columns: 1.25fr .75fr;
+      gap: 4mm;
+      margin: 5mm 0;
+    }
+    .box {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 4mm 4.5mm;
+      background: #fbfdfe;
+    }
+    .box.accent { background: var(--teal-light); border-color: #a9cfda; }
+    .box.warn { background: var(--orange-light); border-color: #f0c98d; }
+    .box.green { background: var(--green-light); border-color: #b8ddc5; }
+    .box.red { background: var(--red-light); border-color: #efb1b1; }
+    .pill {
+      display: inline-block;
+      padding: 1mm 2.5mm;
+      border-radius: 999px;
+      background: #d6ebf0;
+      color: #15566b;
+      font-weight: 700;
+      margin: 1mm 1mm 0 0;
+      font-size: 9.5pt;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2.5mm;
+      margin: 4mm 0 5mm;
+    }
+    .flow-step {
+      padding: 3mm;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      min-height: 27mm;
+    }
+    .num {
+      display: inline-flex;
+      width: 7mm;
+      height: 7mm;
+      border-radius: 50%;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      background: var(--teal);
+      font-weight: 800;
+      margin-bottom: 1.5mm;
+    }
+    .flow-step strong { display: block; color: #174e63; font-size: 10pt; }
+    .flow-step small { color: var(--muted); font-size: 8.5pt; }
+    .step {
+      display: grid;
+      grid-template-columns: 9mm 1fr;
+      gap: 3mm;
+      margin: 5mm 0 7mm;
+      break-inside: avoid;
+    }
+    .step-no {
+      width: 8mm;
+      height: 8mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--orange);
+      color: #fff;
+      font-weight: 800;
+      font-size: 12pt;
+      margin-top: 1mm;
+    }
+    .step-content { min-width: 0; }
+    .step-content > p { color: var(--muted); }
+    .shot {
+      margin-top: 3mm;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f4f8fa;
+      overflow: hidden;
+      position: relative;
+    }
+    .shot img { display: block; width: 100%; height: auto; }
+    .shot.upload { height: 47mm; }
+    .shot.upload img { transform: translateY(-2mm); }
+    .shot.typos { height: 43mm; }
+    .shot.typos img { transform: translateY(-7mm); }
+    .shot.prompt { height: 43mm; }
+    .shot.prompt img { transform: translateY(-2mm); }
+    .shot.result { height: 51mm; }
+    .shot.result img { transform: translateY(-11mm); }
+    .shot.todo { height: 42mm; }
+    .shot.todo img { transform: translateY(-50mm); }
+    .caption { color: var(--muted); font-size: 8.5pt; margin-top: 1mm; }
+    .tip {
+      border-left: 3px solid var(--teal);
+      background: #f5fafb;
+      padding: 2.5mm 3mm;
+      margin: 2.5mm 0;
+      color: #385969;
+    }
+    .checklist { margin: 2mm 0 0; padding-left: 5mm; }
+    .checklist li { margin: 1mm 0; }
+    .mini-table { width: 100%; border-collapse: collapse; margin-top: 2mm; font-size: 9.2pt; }
+    .mini-table th, .mini-table td { border: 1px solid var(--line); padding: 1.8mm 2mm; vertical-align: top; }
+    .mini-table th { background: var(--teal-light); text-align: left; color: #1a5265; }
+    .tag { font-weight: 800; color: var(--green); }
+    .footer {
+      margin-top: 6mm;
+      padding-top: 3mm;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 8.5pt;
+      display: flex;
+      justify-content: space-between;
+    }
+    .page-break { break-before: page; }
+    .no-break { break-inside: avoid; }
+    @media print {
+      body { background: #fff; }
+      .page { margin: 0; width: auto; min-height: auto; }
+      .page-break { break-before: page; }
+      .shot, .box, .flow-step { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      a { color: inherit; text-decoration: none; }
+    }
+    @media screen and (max-width: 900px) {
+      .page { width: auto; min-height: auto; margin: 0; padding: 7mm; }
+      .scenario, .flow { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="cover">
+      <div class="eyebrow">MeetingTutor · A4 Quick Guide</div>
+      <h1>把逐字稿變成可執行的會議記錄</h1>
+      <p class="lead">情境示範：OO系開會討論校慶攤位，要在爆米花與冰淇淋之間做選擇。</p>
+    </header>
+
+    <section class="scenario">
+      <div class="box accent">
+        <h3>本次會議情境</h3>
+        <p>OO系系學會召開行政會議，討論校慶是否設立美食攤位，以及爆米花、冰淇淋的健康、經費、可口度、人力與設備風險。</p>
+        <span class="pill">主席</span><span class="pill">系學會長</span><span class="pill">學生代表甲、乙</span><span class="pill">秘書甲、乙</span>
+      </div>
+      <div class="box warn">
+        <h3>你要得到的成果</h3>
+        <p><strong>一份摘要</strong>：快速掌握討論與暫定結論。</p>
+        <p><strong>一張清單</strong>：列出負責人、期限與待確認事項。</p>
+      </div>
+    </section>
+
+    <h2>四步完成整理</h2>
+    <div class="flow">
+      <div class="flow-step"><span class="num">1</span><strong>上傳逐字稿</strong><small>選擇 .vtt、.txt 或 .srt</small></div>
+      <div class="flow-step"><span class="num">2</span><strong>修正詞彙</strong><small>確認 AI 找出的錯字</small></div>
+      <div class="flow-step"><span class="num">3</span><strong>產生摘要</strong><small>選模板、補提示、整理</small></div>
+      <div class="flow-step"><span class="num">4</span><strong>檢查成果</strong><small>核對摘要與待辦清單</small></div>
+    </div>
+
+    <section class="step">
+      <div class="step-no">1</div>
+      <div class="step-content">
+        <h2>上傳 OO系會議逐字稿</h2>
+        <p>在「上傳逐字稿」區塊選取會議檔案，按下<strong>載入逐字稿</strong>。畫面會顯示時間軸與段落數，方便先確認檔案是否完整。</p>
+        <div class="tip">本例使用 100 段的 `oo-department-campus-festival-food-stall-transcript.vtt`，內容涵蓋爆米花、冰淇淋、健康、經費與可口度。</div>
+        <div class="shot upload"><img src="screenshot-01-upload-transcript.png" alt="MeetingTutor 上傳逐字稿畫面"></div>
+        <div class="caption">畫面重點：選擇檔案 → 確認已載入段落數 → 載入逐字稿。</div>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-no">2</div>
+      <div class="step-content">
+        <h2>先修正 AI 找出的詞彙</h2>
+        <p>若逐字稿含有同音或辨識錯字，系統會以紅色列出建議。直接編輯紅色文字，完成後再進入摘要。</p>
+        <table class="mini-table">
+          <tr><th>逐字稿中的錯字</th><th>建議修正</th><th>本例用途</th></tr>
+          <tr><td>校慶活勳、冰淇琳</td><td>校慶活動、冰淇淋</td><td>保留議題名稱與品項正確</td></tr>
+          <tr><td>經偻、可口渡</td><td>經費、可口度</td><td>讓比較面向可被摘要辨識</td></tr>
+          <tr><td>總務処、許可証、設俻</td><td>總務處、許可證、設備</td><td>避免待辦對象與風險誤讀</td></tr>
+          <tr><td>代錶、衛生規犯、會義</td><td>代表、衛生規範、會議</td><td>讓人名與紀錄欄位一致</td></tr>
+        </table>
+        <div class="shot typos"><img src="screenshot-02-ai-suggestions.png" alt="MeetingTutor AI 詞彙建議畫面"></div>
+        <div class="caption">畫面重點：看到「原詞」與「修飾後」後，將不正確的紅色文字改成正確詞語。</div>
+      </div>
+    </section>
+  </main>
+
+  <main class="page page-break">
+    <header class="cover">
+      <div class="eyebrow">MeetingTutor · Step 3–4</div>
+      <h1>從摘要設定到會後追蹤</h1>
+      <p class="lead">把「討論過什麼」整理成「接下來誰要做什麼」。</p>
+    </header>
+
+    <section class="step">
+      <div class="step-no">3</div>
+      <div class="step-content">
+        <h2>選擇模板，產生會議摘要</h2>
+        <p>在「產生摘要」區塊選擇<strong>會議記錄摘要</strong>。若希望結果更貼近行政會議，可保留系統提示，並勾選輸出待辦事項與下次議程。</p>
+        <ul class="checklist">
+          <li>模板：會議記錄摘要。</li>
+          <li>整理方向：保留原意、先列決議與待辦，未確認的內容標示「待確認」。</li>
+          <li>額外輸出：勾選「輸出待辦事項」與「輸出下次議程」。</li>
+        </ul>
+        <div class="shot prompt"><img src="screenshot-03-summary-settings.png" alt="MeetingTutor 產生摘要設定畫面"></div>
+        <div class="caption">畫面重點：選模板 → 確認提示詞 → 勾選額外輸出 → 按下整理。</div>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-no">4</div>
+      <div class="step-content">
+        <h2>閱讀摘要，核對決議與討論重點</h2>
+        <p>整理完成後，先確認主題、與會者與討論範圍，再看「討論重點」。本例會把兩種攤位方案的優缺點、風險與暫定方向集中呈現。</p>
+        <div class="box accent">
+          <h3>本例摘要應看到的關鍵訊息</h3>
+          <ul class="checklist">
+            <li>爆米花成本較低、設備簡單，但須注意糖分、鈉含量與受潮。</li>
+            <li>冰淇淋吸引力高，但需要冷凍保存、備援電力與較高預算。</li>
+            <li>會議暫不作最終品項決議，先收集問卷與供應商報價。</li>
+          </ul>
+        </div>
+        <div class="shot result"><img src="screenshot-04-summary-result.png" alt="MeetingTutor 會議記錄摘要結果畫面"></div>
+        <div class="caption">畫面重點：先看會議主題、與會者，再往下核對討論重點與暫定結論。</div>
+      </div>
+    </section>
+
+    <section class="no-break">
+      <h2>把摘要轉成可執行的待辦清單</h2>
+      <div class="box green">
+        <h3>本例待辦事項範例</h3>
+        <table class="mini-table">
+          <tr><th>負責人</th><th>任務</th><th>期限／狀態</th></tr>
+          <tr><td>系學會長</td><td>發布學生問卷，收集品項偏好與價格接受度。</td><td>三天內</td></tr>
+          <tr><td>秘書乙</td><td>取得兩家供應商報價、保固與冷凍設備條件。</td><td>五天內</td></tr>
+          <tr><td>秘書甲</td><td>整理校方食品衛生規範與過敏原標示要求。</td><td>下次會議前</td></tr>
+          <tr><td>學生代表甲、乙</td><td>檢查問卷題目並補充不同年級意見。</td><td>待回報</td></tr>
+        </table>
+      </div>
+      <div class="shot todo"><img src="screenshot-05-action-items.png" alt="MeetingTutor 待辦事項與未決議結果畫面"></div>
+      <div class="caption">畫面重點：把每一項任務的負責人與期限抄入團隊工作表，會後即可追蹤。</div>
+    </section>
+
+    <section class="scenario" style="margin-top:5mm">
+      <div class="box red">
+        <h3>未決議事項</h3>
+        <p>單一品項或雙品項、是否採預約券、免費或販售模式、可用電力容量，以及冰淇淋冷凍設備的可靠性。</p>
+      </div>
+      <div class="box warn">
+        <h3>爭議事項</h3>
+        <p>低成本、易執行的爆米花，與高吸引力但設備風險較高的冰淇淋，應如何取捨。</p>
+      </div>
+    </section>
+
+    <div class="tip"><strong>列印提示：</strong>列印時選擇 A4、直向，開啟「背景圖形／背景色彩」可保留重點色塊；本說明使用相對路徑，請與 5 張截圖放在同一資料夾開啟。</div>
+    <footer class="footer"><span>MeetingTutor 使用說明｜OO系校慶攤位情境</span><span>A4 可列印版</span></footer>
+  </main>
+</body>
+</html>

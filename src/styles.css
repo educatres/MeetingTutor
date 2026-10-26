@@ -21,6 +21,8 @@ button { cursor: pointer; }
 .hardware-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .hardware-note { max-width: 760px !important; font-size: 14px; }
 .header-actions { display: flex; align-items: stretch; gap: 8px; flex-wrap: nowrap; margin-left: auto; }
+.quick-start-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #f0c36a; background: #fff3d6; color: #784f0c; border-radius: 7px; padding: 8px 12px; font-weight: 800; white-space: nowrap; text-decoration: none; }
+.quick-start-button:hover { background: #f5c55f; color: #4b3308; }
 .hardware-button { border: 1px solid #8eafbd; background: #f0f7fa; color: #1c526a; border-radius: 7px; padding: 9px 12px; font-weight: 700; white-space: nowrap; }
 .test-preview-toggle { border: 1px solid #f0c36a; background: #fff3d6; color: #784f0c; border-radius: 7px; padding: 8px 12px; font-weight: 800; white-space: nowrap; }
 .test-preview-toggle.is-active { background: #f5c55f; color: #4b3308; }
@@ -177,6 +179,7 @@ button { cursor: pointer; }
   .hardware-note { width: 100%; }
   .header-actions { width: 100%; flex-wrap: wrap; }
   .header-actions > button { flex: 1; }
+  .header-actions > .quick-start-button { flex: 1; }
   .settings-toggle { max-width: 100%; }
   .meeting-admin-help { align-items: stretch; flex-direction: column; gap: 12px; }
   .meeting-guide-button { width: 100%; }
