@@ -56,10 +56,13 @@ button { cursor: pointer; }
 .section-heading > .test-preview-toggle { margin-left: auto; flex: none; }
 .section-heading h2 { font-size: 20px; margin: 0 0 4px; color: #1e4058; }
 .section-heading p { margin: 0; color: #667783; font-size: 14px; }
-.meeting-admin-help { margin: 0 0 18px; padding: 15px 17px; border: 1px solid #c4d8e4; border-left: 4px solid #2f7898; border-radius: 9px; background: #f2f8fa; color: #3d5663; }
-.meeting-admin-help h3 { margin: 0 0 6px; color: #1e526b; font-size: 16px; }
+.meeting-admin-panel { padding: 16px; }
+.meeting-admin-help { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 15px 17px; border: 1px solid #c4d8e4; border-left: 4px solid #2f7898; border-radius: 9px; background: #f2f8fa; color: #3d5663; }
+.meeting-admin-help h2 { margin: 0 0 6px; color: #1e526b; font-size: 18px; }
 .meeting-admin-help p { margin: 0; font-size: 14px; line-height: 1.7; }
 .meeting-admin-help code { padding: 1px 4px; border-radius: 4px; background: #e1eef3; color: #1e526b; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .95em; }
+.meeting-guide-button { display: inline-flex; flex: none; align-items: center; justify-content: center; padding: 10px 14px; border: 1px solid #2f7898; border-radius: 7px; background: #2f7898; color: #fff; font-size: 14px; font-weight: 700; line-height: 1.4; text-align: center; text-decoration: none; }
+.meeting-guide-button:hover { background: #245f78; border-color: #245f78; }
 .step { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #dbeaf2; color: #1f5570; font-weight: 800; flex: none; }
 .controls-row, .provider-grid, .glossary-form { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
 .action-row-centered { display: flex; justify-content: center; margin-top: 12px; }
@@ -174,6 +177,8 @@ button { cursor: pointer; }
   .header-actions { width: 100%; flex-wrap: wrap; }
   .header-actions > button { flex: 1; }
   .settings-toggle { max-width: 100%; }
+  .meeting-admin-help { align-items: stretch; flex-direction: column; gap: 12px; }
+  .meeting-guide-button { width: 100%; }
   .header-actions { width: 100%; margin-left: 0; }
   .ai-settings-panel { padding: 16px; }
   .test-preview-panel { padding: 16px; }

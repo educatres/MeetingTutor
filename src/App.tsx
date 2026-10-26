@@ -482,11 +482,17 @@ export default function App() {
     </header>
 
     <main className="workspace">
+      <section className="panel meeting-admin-panel" aria-labelledby="meeting-admin-help-title">
+        <div className="meeting-admin-help">
+          <div>
+            <h2 id="meeting-admin-help-title">MeetingTutor 如何協助行政會議整理？</h2>
+            <p>先用 Microsoft Teams 錄製會議並下載 <code>.vtt</code> 逐字稿，再交給 MeetingTutor。系統可以依照與會者姓名、專有名詞、會議通知、會議資料或講義修正轉錄內容，並由 AI 整理會議摘要、決議、工作項目與爭議項目。您也能自訂範本與提示詞，例如要求保留逐字稿、指定整理格式，或產出會議紀錄通知信，讓行政整理更快、更一致。</p>
+          </div>
+          <a className="meeting-guide-button" href="./docs/Teams逐字稿下載步驟/Teams逐字稿操作說明.html" target="_blank" rel="noreferrer">查看 Teams 錄製與逐字稿操作說明</a>
+        </div>
+      </section>
+
       <section className="panel"><div className="section-heading"><span className="step">1</span><div><h2>上傳逐字稿</h2><p>建議使用 Teams 產生字幕，再上傳至本系統進行摘要與統整。</p></div><button className={testPreviewOpen ? 'test-preview-toggle is-active' : 'test-preview-toggle'} type="button" onClick={() => setTestPreviewOpen((current) => !current)} aria-expanded={testPreviewOpen}>離線轉寫 (Beta)</button></div>
-        <section className="meeting-admin-help" aria-labelledby="meeting-admin-help-title">
-          <h3 id="meeting-admin-help-title">MeetingTutor 如何協助行政會議整理？</h3>
-          <p>先用 Microsoft Teams 錄製會議並下載 <code>.vtt</code> 逐字稿，再交給 MeetingTutor。系統可以依照與會者姓名、專有名詞、會議通知、會議資料或講義修正轉錄內容，並由 AI 整理會議摘要、決議、工作項目與爭議項目。您也能自訂範本與提示詞，例如要求保留逐字稿、指定整理格式，或產出會議紀錄通知信，讓行政整理更快、更一致。</p>
-        </section>
         {testPreviewOpen && <section className="test-preview-panel" aria-label="離線轉寫 (Beta)">
           <div className="test-preview-heading"><div><h2>離線轉寫 (Beta)</h2><p>需要測試瀏覽器端語音轉錄時，再從這裡上傳音訊或開始錄音。</p></div><button type="button" onClick={() => setTestPreviewOpen(false)}>關閉</button></div>
           <div className="test-preview-notice" role="note"><strong>建議先使用 Teams 產生字幕</strong><p>目前的語音模型僅在您的瀏覽器中執行，辨識精確度仍有限。此離線轉寫只適合發音較準確、背景雜訊少且較短的錄音檔案；建議先使用 Teams 錄音產生字幕，再將字幕上傳至本系統進行摘要與統整。</p></div>
