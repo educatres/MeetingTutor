@@ -78,6 +78,19 @@
     h3 { margin: 0 0 1.5mm; font-size: 11.5pt; color: #e9f8fa; }
     p { margin: 1.5mm 0; }
     .lead { color: var(--muted); font-size: 11.5pt; margin-top: 0; }
+    .transcript-download { margin: 2mm 0 0; }
+    .transcript-download a {
+      display: inline-flex;
+      align-items: center;
+      padding: 1.8mm 3.5mm;
+      border: 1px solid #6faebd;
+      border-radius: 999px;
+      background: #356779;
+      color: #effbfc;
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .transcript-download a:hover { background: #427f90; }
     .scenario {
       display: grid;
       grid-template-columns: 1.25fr .75fr;
@@ -231,6 +244,7 @@
       .page-break { break-before: page; }
       .cover, .step, .no-break { background: #fff; border-color: #d5e1e6; box-shadow: none; }
       h3 { color: #1d566b; }
+      .transcript-download a { background: #eaf5f8; border-color: #a9cfda; color: #176b82; }
       .shot, .box, .flow-step { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-shadow: none; }
       a { color: inherit; text-decoration: none; }
     }
@@ -246,6 +260,7 @@
       <div class="eyebrow">MeetingTutor · A4 Quick Guide</div>
       <h1>把逐字稿變成可執行的會議記錄</h1>
       <p class="lead">情境示範：OO系開會討論校慶攤位，要在爆米花與冰淇淋之間做選擇。</p>
+      <p class="transcript-download"><a href="oo-department-campus-festival-food-stall-transcript.vtt" download>範例逐字稿下載（Microsoft Teams 謄寫的 .vtt 格式）</a></p>
     </header>
 
     <section class="scenario">
