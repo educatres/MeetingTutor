@@ -24,6 +24,8 @@ button { cursor: pointer; }
 .header-actions { display: flex; align-items: stretch; gap: 8px; flex-wrap: nowrap; margin-left: auto; min-width: 0; }
 .quick-start-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #f0c36a; background: #fff3d6; color: #784f0c; border-radius: 7px; padding: 8px 12px; font-weight: 800; white-space: nowrap; text-decoration: none; }
 .quick-start-button:hover { background: #f5c55f; color: #4b3308; }
+.teams-mobile-guide-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #9ca9e8; background: #eef0ff; color: #363b83; border-radius: 7px; padding: 8px 12px; font-weight: 800; white-space: nowrap; text-decoration: none; }
+.teams-mobile-guide-button:hover { border-color: #6872cf; background: #dfe3ff; color: #252a68; }
 .hardware-button { border: 1px solid #8eafbd; background: #f0f7fa; color: #1c526a; border-radius: 7px; padding: 9px 12px; font-weight: 700; white-space: nowrap; }
 .test-preview-toggle { border: 1px solid #f0c36a; background: #fff3d6; color: #784f0c; border-radius: 7px; padding: 8px 12px; font-weight: 800; white-space: nowrap; }
 .test-preview-toggle.is-active { background: #f5c55f; color: #4b3308; }
@@ -183,8 +185,8 @@ button { cursor: pointer; }
   .header-actions { width: 100%; flex-wrap: wrap; }
   .header-actions > * { min-width: 0; }
   .header-actions > button { flex: 1; }
-  .header-actions > .quick-start-button { flex: 1; }
-  .quick-start-button { min-width: 0; }
+  .header-actions > .quick-start-button, .header-actions > .teams-mobile-guide-button { flex: 1; }
+  .quick-start-button, .teams-mobile-guide-button { min-width: 0; }
   .settings-toggle { max-width: 100%; }
   .meeting-admin-help { align-items: stretch; flex-direction: column; gap: 12px; }
   .meeting-guide-button { width: 100%; }
@@ -226,7 +228,7 @@ button { cursor: pointer; }
   .hero h1 { font-size: 18px; }
   .hero-heading-row { gap: 8px; }
   .header-actions { gap: 6px; }
-  .header-actions > button, .header-actions > .quick-start-button { flex: 1 1 100%; width: 100%; }
+  .header-actions > button, .header-actions > .quick-start-button, .header-actions > .teams-mobile-guide-button { flex: 1 1 100%; width: 100%; }
   .workspace { width: calc(100% - 16px); margin: 10px auto; gap: 10px; }
   .panel, .meeting-admin-panel { padding: 12px; border-radius: 9px; }
   .ai-settings-panel, .test-preview-panel { padding: 12px; }

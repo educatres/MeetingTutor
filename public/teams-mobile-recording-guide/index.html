@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="使用 Microsoft Teams 手機版錄製會議與開啟謄寫的圖文教學。">
+  <title>Teams 手機版錄音教學｜MeetingTutor</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172038;
+      --muted: #5e6a7e;
+      --brand: #4756b9;
+      --brand-dark: #313d91;
+      --brand-soft: #f0f2ff;
+      --line: #dce1ed;
+      --surface: #ffffff;
+      --page: #f7f8fc;
+      --notice: #fff9e8;
+      --notice-line: #efc65d;
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--page); }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--page);
+      font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+      line-height: 1.7;
+    }
+    .page { width: min(1160px, calc(100% - 40px)); margin: 0 auto; }
+    .hero { padding: 58px 0 44px; }
+    .brand { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 16px; color: var(--brand-dark); font-size: 14px; font-weight: 800; letter-spacing: .04em; }
+    .brand::before { width: 11px; height: 11px; border-radius: 50%; background: var(--brand); content: ""; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 780px; margin-bottom: 14px; font-size: clamp(30px, 5vw, 48px); line-height: 1.2; letter-spacing: -.035em; }
+    .lead { max-width: 720px; margin-bottom: 0; color: var(--muted); font-size: clamp(16px, 2vw, 19px); }
+    .overview { display: grid; grid-template-columns: 1.2fr .8fr; gap: 22px; margin-bottom: 34px; }
+    .overview-card, .notice, .step-card { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 8px 24px rgba(25, 38, 76, .05); }
+    .overview-card { padding: 25px 27px; }
+    .overview-card h2, .notice h2 { margin-bottom: 7px; font-size: 19px; line-height: 1.4; }
+    .overview-card p, .notice p { margin-bottom: 0; color: var(--muted); }
+    .journey { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0 0; padding: 0; list-style: none; }
+    .journey li { min-height: 94px; padding: 14px; border-radius: 12px; background: var(--brand-soft); color: #35408c; font-weight: 800; }
+    .journey span { display: block; margin-bottom: 3px; font-size: 12px; letter-spacing: .08em; }
+    .notice { padding: 25px 27px; border-color: #f1d997; background: var(--notice); }
+    .notice h2 { color: #70520d; }
+    .notice p { color: #725f32; }
+    .steps-header { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin: 50px 0 18px; }
+    .eyebrow { margin-bottom: 5px; color: var(--brand); font-size: 13px; font-weight: 800; letter-spacing: .11em; }
+    .steps-header h2 { margin-bottom: 0; font-size: clamp(25px, 4vw, 34px); line-height: 1.25; }
+    .steps-header p { max-width: 380px; margin-bottom: 0; color: var(--muted); }
+    .steps { display: grid; gap: 18px; padding-bottom: 60px; }
+    .step-card { display: grid; grid-template-columns: minmax(260px, .88fr) minmax(0, 1.12fr); gap: clamp(24px, 5vw, 58px); align-items: center; padding: clamp(20px, 4vw, 42px); overflow: hidden; }
+    .step-card:nth-child(even) .step-image { order: 2; }
+    .step-copy { max-width: 460px; }
+    .step-label { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-bottom: 14px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 14px; font-weight: 800; }
+    .step-copy h3 { margin-bottom: 9px; font-size: clamp(21px, 3vw, 28px); line-height: 1.32; }
+    .step-copy p { margin-bottom: 0; color: var(--muted); }
+    .tip { margin-top: 16px; padding: 11px 13px; border-left: 3px solid #8894e2; border-radius: 0 8px 8px 0; background: #f5f6ff; color: #3d478d; font-size: 14px; font-weight: 700; }
+    .step-image { display: grid; place-items: center; min-width: 0; padding: 13px; border: 1px solid #e3e6f1; border-radius: 14px; background: #f8f9fc; }
+    .step-image img { display: block; max-width: min(100%, 360px); height: auto; border-radius: 8px; box-shadow: 0 8px 18px rgba(16, 20, 33, .17); }
+    .complete { margin: 0 0 60px; padding: 28px; border-radius: 18px; background: linear-gradient(135deg, #3c4aa7, #596cd4); color: #fff; }
+    .complete h2 { margin-bottom: 8px; font-size: 24px; }
+    .complete p { max-width: 740px; margin-bottom: 0; color: #edf0ff; }
+    footer { padding: 0 0 38px; color: var(--muted); font-size: 13px; text-align: center; }
+    @media (max-width: 760px) {
+      .page { width: min(100% - 28px, 620px); }
+      .hero { padding: 36px 0 30px; }
+      .overview { grid-template-columns: 1fr; }
+      .journey { grid-template-columns: 1fr; }
+      .steps-header { display: block; margin-top: 40px; }
+      .steps-header p { margin-top: 10px; }
+      .step-card, .step-card:nth-child(even) { grid-template-columns: 1fr; gap: 22px; }
+      .step-card:nth-child(even) .step-image { order: initial; }
+      .step-copy { max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <p class="brand">MEETINGTUTOR × MICROSOFT TEAMS</p>
+      <h1>用 Teams 手機版錄下會議，交給 MeetingTutor 整理</h1>
+      <p class="lead">跟著這四個畫面，在 Teams 行動版開啟「錄製和謄寫」。會議結束後即可從 Teams 取得逐字稿，匯入 MeetingTutor 製作會議記錄。</p>
+    </header>
+
+    <section class="overview" aria-label="教學重點">
+      <div class="overview-card">
+        <h2>完成後，你會得到什麼？</h2>
+        <p>Teams 會開始錄製會議，並同步啟動謄寫；畫面頂端會顯示錄製與謄寫已啟動的提示。</p>
+        <ol class="journey">
+          <li><span>01</span>開啟更多選單</li>
+          <li><span>02</span>找到開始錄製</li>
+          <li><span>03</span>確認錄製與謄寫</li>
+        </ol>
+      </div>
+      <aside class="notice">
+        <h2>開始前先告知與會者</h2>
+        <p>錄製開始後，Teams 會顯示通知讓所有與會者知道。請依組織規範及會議共識取得同意後，再開始錄製。</p>
+      </aside>
+    </section>
+
+    <section aria-labelledby="steps-title">
+      <div class="steps-header">
+        <div><p class="eyebrow">STEP BY STEP</p><h2 id="steps-title">Teams 手機版開啟錄音步驟</h2></div>
+        <p>以下畫面以 iPhone 版 Teams 為例；不同版本的按鈕文字或位置可能略有不同。</p>
+      </div>
+
+      <div class="steps">
+        <article class="step-card">
+          <div class="step-copy">
+            <span class="step-label">1</span>
+            <h3>在會議畫面點選「…」</h3>
+            <p>進入 Teams 會議後，在下方工具列找到三個點的「更多」按鈕並點選，開啟完整的會議功能選單。</p>
+            <p class="tip">畫面中的紅圈與箭頭標示了要點選的位置。</p>
+          </div>
+          <figure class="step-image"><img src="step-01-more-menu.png" alt="Teams 會議下方工具列中的更多按鈕以紅圈和箭頭標示"></figure>
+        </article>
+
+        <article class="step-card">
+          <div class="step-copy">
+            <span class="step-label">2</span>
+            <h3>在選單中向下滑動</h3>
+            <p>更多選單一開始會顯示聊天、人員、分享等功能。請在這個選單裡向下捲動，繼續尋找錄製功能。</p>
+            <p class="tip">黃色文字與向下箭頭提示需滑到選單底部。</p>
+          </div>
+          <figure class="step-image"><img src="step-02-scroll-down.png" alt="Teams 更多選單顯示向下滑到底的黃色指示"></figure>
+        </article>
+
+        <article class="step-card">
+          <div class="step-copy">
+            <span class="step-label">3</span>
+            <h3>點選「開始錄製」</h3>
+            <p>捲動後，在「群組設定」區塊點選「開始錄製」。畫面說明此選項會同時開始錄製和謄寫。</p>
+            <p class="tip">紅框與箭頭標示的就是要選擇的功能。</p>
+          </div>
+          <figure class="step-image"><img src="step-03-start-recording.png" alt="Teams 選單中的開始錄製按鈕以紅框與箭頭標示，說明會同時開始錄製和謄寫"></figure>
+        </article>
+
+        <article class="step-card">
+          <div class="step-copy">
+            <span class="step-label">4</span>
+            <h3>確認已啟動錄製和謄寫</h3>
+            <p>回到會議畫面後，頂端出現「您已啟動錄製和謄寫，讓所有人知道他們已被納入其中」的通知，即代表設定完成。</p>
+            <p class="tip">頂端的紅色錄製圖示也會持續顯示計時。</p>
+          </div>
+          <figure class="step-image"><img src="step-04-recording-active.png" alt="Teams 會議頂端顯示已啟動錄製和謄寫的通知與紅色錄製計時圖示"></figure>
+        </article>
+      </div>
+    </section>
+
+    <section class="complete" aria-label="下一步">
+      <h2>下一步：讓 MeetingTutor 協助整理</h2>
+      <p>會議結束後，請在 Teams 下載逐字稿檔案（建議使用 .vtt 格式），再回到 MeetingTutor 上傳檔案，即可使用 AI 整理摘要、決議與待辦事項。</p>
+    </section>
+    <footer>MeetingTutor｜Teams 手機版錄製與謄寫圖文教學</footer>
+  </main>
+</body>
+</html>
