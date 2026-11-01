@@ -1,4 +1,5 @@
 import type { ModelInfo, ProviderConfig, ProviderId } from '../types'
+import { PROTECTED_SYSTEM_INSTRUCTIONS, scanPromptInjection, userSystemInstructions } from './security'
 
 export const PROVIDERS: Array<{ id: ProviderId; label: string; defaultBaseUrl: string; hint: string }> = [
   { id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', hint: '支援 OpenAI 相容的 models 與 chat/completions。' },
@@ -148,7 +149,13 @@ function responsesText(body: any): string {
 export async function generateText(config: ProviderConfig, prompt: string, systemPrompt = ''): Promise<string> {
   if (!config.apiKey.trim() || !config.modelId) throw new Error('請先測試 API Key 並選擇模型。')
   const model = config.modelId
-  const instructions = systemPrompt.trim()
+  // Keep application security instructions after user preferences. Uploaded
+  // content is fenced by the prompt builders and can never become a command.
+  const suspiciousSystemPrompt = scanPromptInjection(systemPrompt, 'system-prompt')
+  if (suspiciousSystemPrompt.length) {
+    throw new Error('Security policy blocked a system-prompt instruction that attempted to change identity or disclose protected instructions.')
+  }
+  const instructions = [userSystemInstructions(systemPrompt), PROTECTED_SYSTEM_INSTRUCTIONS].filter(Boolean).join('\n\n')
   if (config.id === 'google') {
     const base = cleanBaseUrl(config.baseUrl || 'https://generativelanguage.googleapis.com/v1beta')
     const requestBody: Record<string, unknown> = { contents: [{ role: 'user', parts: [{ text: prompt }] }] }

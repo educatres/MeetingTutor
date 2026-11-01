@@ -131,6 +131,12 @@ button { cursor: pointer; }
 .reference-list button { border: 0; background: none; color: #a14343; }
 .model-select { margin-top: 14px; max-width: 100%; }
 .system-prompt-panel { margin-top: 16px; padding: 14px; border: 1px solid #c8dce5; border-radius: 8px; background: #f7fbfc; }
+.security-warning { position: relative; padding: 14px 150px 14px 16px; border: 1px solid #df9b76; border-radius: 9px; background: #fff5ed; color: #71351f; }
+.security-warning strong { display: block; color: #a33d1c; font-size: 16px; }
+.security-warning p { margin: 5px 0; line-height: 1.55; }
+.security-warning small { display: block; color: #854b35; line-height: 1.5; }
+.security-warning .secondary { position: absolute; top: 14px; right: 14px; }
+.security-note { margin: 8px 0 0; color: #80542c; font-size: 12px; line-height: 1.5; }
 .system-prompt-panel textarea { width: 100%; min-height: 116px; resize: vertical; border: 1px solid #bdcbd3; border-radius: 7px; padding: 10px 11px; color: #253640; background: #fff; line-height: 1.55; }
 .system-prompt-examples { margin-top: 10px; }
 .system-prompt-examples > span { display: block; margin-bottom: 7px; color: #516370; font-size: 12px; font-weight: 700; }

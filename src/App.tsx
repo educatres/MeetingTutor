@@ -7,6 +7,7 @@ import { readReference } from './lib/references'
 import { cleanPlainTextOutput, createAnnouncementEmailPrompt, createGlossaryPrompt, createPolishedTranscriptPrompt, createPrompt, createWorkgroupSummaryPrompt, extractPlainTextSection, parseGlossarySuggestions, parsePolishedTranscript } from './lib/outputs'
 import { transcribe } from './lib/transcription'
 import { parseTeamsTranscript } from './lib/transcript'
+import { scanPromptInjection, securityWarningText, type SecurityFinding, type SecuritySource } from './lib/security'
 
 const defaultProvider: ProviderId = 'openai'
 const API_KEYS_STORAGE_KEY = 'meetingtutor.api-keys.v1'
@@ -134,6 +135,7 @@ export default function App() {
   const [output, setOutput] = useState<MeetingOutput | null>(null)
   const [polishedSegments, setPolishedSegments] = useState<TranscriptSegment[]>([])
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus | null>(null)
+  const [securityWarnings, setSecurityWarnings] = useState<SecurityFinding[]>([])
   const [recordTemplate, setRecordTemplate] = useState<RecordTemplate>(() => storedSystemPrompt().includes('上課錄音') ? 'class' : 'meeting')
   const [generatedTemplate, setGeneratedTemplate] = useState<RecordTemplate>('meeting')
   const [includeActions, setIncludeActions] = useState(false)
@@ -150,6 +152,34 @@ export default function App() {
   })
   const liveTranscriptRef = useRef<HTMLDivElement | null>(null)
   const outputResultRef = useRef<HTMLDivElement | null>(null)
+
+  const reportSecurityFindings = (findings: SecurityFinding[]) => {
+    if (!findings.length) return
+    setSecurityWarnings((current) => {
+      const next = [...current]
+      for (const finding of findings) {
+        if (!next.some((item) => item.source === finding.source && item.rule === finding.rule && item.excerpt === finding.excerpt)) next.push(finding)
+      }
+      return next.slice(-12)
+    })
+    const message = securityWarningText(findings)
+    setGenerationStatus({ kind: 'error', message })
+    setStatus(message)
+    window.alert(message)
+  }
+
+  const clearSecuritySource = (source: SecuritySource) => {
+    setSecurityWarnings((current) => current.filter((finding) => finding.source !== source))
+  }
+
+  const scanAllUserContent = () => {
+    const findings: SecurityFinding[] = []
+    findings.push(...scanPromptInjection(systemPrompt, 'system-prompt'))
+    findings.push(...scanPromptInjection(segments.map((segment) => segment.text).join('\n'), 'transcript'))
+    findings.push(...references.flatMap((reference) => scanPromptInjection(reference.text, 'reference')))
+    findings.push(...scanPromptInjection(glossary.map((term) => `${term.canonical} ${term.aliases}`).join('\n'), 'glossary'))
+    return findings
+  }
 
   useEffect(() => {
     try {
@@ -240,11 +270,15 @@ export default function App() {
     setUploadedTranscriptSegments([])
     setSegments([])
     setPolishedSegments([])
+    clearSecuritySource('transcript')
     if (!file) return
     setAudioFile(null)
     setBusy(true)
     try {
-      const parsed = parseTeamsTranscript(await file.text())
+      const rawText = await file.text()
+      const findings = scanPromptInjection(rawText, 'transcript')
+      if (findings.length) reportSecurityFindings(findings)
+      const parsed = parseTeamsTranscript(rawText)
       if (!parsed.length) throw new Error('找不到可辨識的逐字稿內容。')
       setUploadedTranscriptSegments(parsed)
       setStatus(`已解析 Teams 逐字稿：${file.name}，共 ${parsed.length} 段；按下「載入逐字稿」後開始使用。`)
@@ -338,6 +372,8 @@ export default function App() {
     setBusy(true)
     try {
       const parsed = await Promise.all(files.map(readReference))
+      const findings = parsed.flatMap((reference) => scanPromptInjection(reference.text, 'reference'))
+      if (findings.length) reportSecurityFindings(findings)
       setReferences((current) => [...current, ...parsed])
       setStatus(`已加入 ${parsed.length} 份參考資料。`)
     } catch (error) {
@@ -390,6 +426,12 @@ export default function App() {
       setSettingsOpen(true)
       return
     }
+    const securityFindings = scanAllUserContent()
+    if (securityFindings.length) {
+      reportSecurityFindings(securityFindings)
+      setGlossaryStatus('偵測到疑似 Prompt Injection，已暫停 AI 詞彙分析。')
+      return
+    }
     setBusy(true)
     setGlossaryStatus('AI 正在從逐字稿整理詞彙建議…')
     try {
@@ -427,6 +469,16 @@ export default function App() {
     })
   }
 
+  const updateSystemPrompt = (value: string) => {
+    const findings = scanPromptInjection(value, 'system-prompt')
+    if (findings.length) {
+      reportSecurityFindings(findings)
+      return
+    }
+    clearSecuritySource('system-prompt')
+    setSystemPrompt(value)
+  }
+
   const generate = async () => {
     if (!segments.length) {
       const message = '請先完成轉錄或載入逐字稿。'
@@ -439,6 +491,11 @@ export default function App() {
       setGenerationStatus({ kind: 'error', message })
       setStatus(message)
       setSettingsOpen(true)
+      return
+    }
+    const securityFindings = scanAllUserContent()
+    if (securityFindings.length) {
+      reportSecurityFindings(securityFindings)
       return
     }
     setBusy(true)
@@ -493,6 +550,12 @@ export default function App() {
     </header>
 
     <main className="workspace">
+      {securityWarnings.length > 0 && <section className="security-warning" role="alert" aria-live="assertive">
+        <strong>安全警告</strong>
+        <p>{securityWarningText(securityWarnings)}</p>
+        <small>請檢查逐字稿、參考檔案、詞彙與自訂指示；修正或移除可疑內容後，才能再次產生結果。</small>
+        <button type="button" className="secondary" onClick={() => setSecurityWarnings([])}>關閉警告</button>
+      </section>}
       <section className="panel meeting-admin-panel" aria-labelledby="meeting-admin-help-title">
         <div className="meeting-admin-help">
           <div>
@@ -536,7 +599,8 @@ export default function App() {
         <div className="record-template"><strong>記錄模板</strong><button className="template-info-button" type="button" onClick={() => setTemplateHelpOpen((current) => !current)} aria-expanded={templateHelpOpen} aria-label="查看模板內容">i</button>{RECORD_TEMPLATE_OPTIONS.map((template) => <label key={template.id}><input type="radio" name="record-template" value={template.id} checked={recordTemplate === template.id} onChange={() => changeRecordTemplate(template.id)} disabled={busy} />{template.label}</label>)}</div>
         {templateHelpOpen && <div className="template-help" role="note"><strong>模板內容</strong><ul>{RECORD_TEMPLATE_OPTIONS.map((template) => <li key={template.id}><b>{template.label}</b>：{template.headings}</li>)}</ul></div>}
         <div className="system-prompt-panel">
-          <label className="field"><span>AI 修正方向（System Prompt）</span><textarea value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} rows={5} maxLength={6000} disabled={busy} placeholder="例如：保留講者原意，將口語改為正式繁體中文；專有名詞不要自行猜測；摘要優先列出決議、負責人與期限。" /></label>
+          <label className="field"><span>AI 修正方向（System Prompt）</span><textarea value={systemPrompt} onChange={(event) => updateSystemPrompt(event.target.value)} rows={5} maxLength={6000} disabled={busy} placeholder="例如：保留講者原意，將口語改為正式繁體中文；專有名詞不要自行猜測；摘要優先列出決議、負責人與期限。" aria-describedby="system-prompt-security-note" /></label>
+          <p className="security-note" id="system-prompt-security-note">安全規則固定保護 AI 身分與系統指示；這裡只能設定輸出格式與整理偏好，不能要求模型改變身分或揭露隱藏提示詞。</p>
           <div className="system-prompt-examples"><span>快速範例（可複選，點擊後追加）</span><div>{SYSTEM_PROMPT_EXAMPLES.map((example) => <button type="button" key={example.label} onClick={() => addSystemPromptExample(example)} disabled={busy || systemPrompt.includes(example.prompt)} title={example.prompt}>{example.label}</button>)}</div></div>
           <div className="system-prompt-meta"><span>自動保存在此瀏覽器，重新整理後仍會保留。{systemPrompt.length.toLocaleString()} / 6,000 字</span><button type="button" className="secondary" onClick={() => setSystemPrompt('')} disabled={busy || !systemPrompt}>清除指示</button></div>
         </div>

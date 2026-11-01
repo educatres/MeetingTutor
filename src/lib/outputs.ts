@@ -1,4 +1,5 @@
 import type { GlossarySuggestion, GlossaryTerm, Language, RecordTemplate, ReferenceDocument, TranscriptSegment } from '../types'
+import { wrapUntrustedContent } from './security'
 
 export const normalizeLineBreaks = (value: string) => value.replace(/\\r\\n|\\n|\\r/g, '\n').replace(/\r\n?/g, '\n')
 const formatTime = (seconds: number) => {
@@ -9,7 +10,8 @@ const formatTime = (seconds: number) => {
 }
 
 function transcriptForPrompt(segments: TranscriptSegment[]) {
-  return segments.map((segment) => `${formatTime(segment.start)} ${segment.speaker || '未指定說話者'}：${segment.text}`).join('\n').slice(0, 28_000)
+  const rows = segments.map((segment) => `${formatTime(segment.start)} ${segment.speaker || '未指定說話者'}：${segment.text}`).join('\n').slice(0, 28_000)
+  return wrapUntrustedContent('transcript', rows)
 }
 
 function collectJsonText(value: unknown): string[] {
@@ -82,8 +84,8 @@ export function extractPlainTextSection(value: string, headings: string[]) {
 }
 
 export function createPrompt(segments: TranscriptSegment[], references: ReferenceDocument[], glossary: GlossaryTerm[], language: Language, recordTemplate: RecordTemplate) {
-  const terms = glossary.map((term) => `${term.kind}：${term.canonical}${term.aliases ? `（別名：${term.aliases}）` : ''}${term.locked ? '【已確認，禁止擅改】' : ''}`).join('\n') || '（沒有使用者確認的詞彙）'
-  const refs = references.map((reference) => `### ${reference.name}\n${reference.text.slice(0, 8_000)}`).join('\n\n') || '（沒有參考資料）'
+  const terms = wrapUntrustedContent('glossary', glossary.map((term) => `${term.kind}：${term.canonical}${term.aliases ? `（別名：${term.aliases}）` : ''}${term.locked ? '【已確認，禁止擅改】' : ''}`).join('\n') || '（沒有使用者確認的詞彙）')
+  const refs = references.map((reference) => wrapUntrustedContent(`reference-${reference.name.replace(/[^a-z0-9_-]/gi, '_').slice(0, 48)}`, reference.text.slice(0, 8_000))).join('\n\n') || '（沒有參考資料）'
   const outputLanguage = language === 'zh' ? '繁體中文（zh-Hant；禁止輸出簡體中文）' : '英文（English）'
   const defaultTemplate = recordTemplate === 'class'
     ? `請整理成一份可直接使用的「課堂筆記」，依序包含：\n課程主題\n日期／授課者（未提及就寫「未提供」）\n一、課程摘要\n二、學習目標\n三、核心概念與定義\n四、各主題重點講解\n五、例子／案例／示範\n六、作業、閱讀或重要提醒\n七、待釐清問題\n請保留教師的論述脈絡與關鍵例子，不要改寫成會議決議格式。`
@@ -133,7 +135,7 @@ export function createPrompt(segments: TranscriptSegment[], references: Referenc
 }
 
 function meetingOutputForPrompt(minutes: string) {
-  return minutes.slice(0, 16_000)
+  return wrapUntrustedContent('generated-document', minutes.slice(0, 16_000))
 }
 
 export function createWorkgroupSummaryPrompt(minutes: string, language: Language) {
@@ -154,7 +156,7 @@ export function createGlossaryPrompt(segments: TranscriptSegment[], glossary: Gl
 
 export function createPolishedTranscriptPrompt(segments: TranscriptSegment[], language: Language) {
   const outputLanguage = language === 'zh' ? '繁體中文' : '英文'
-  const rows = segments.map((segment, index) => `${index}: ${segment.text}`).join('\n').slice(0, 28_000)
+  const rows = wrapUntrustedContent('transcript-for-polishing', segments.map((segment, index) => `${index}: ${segment.text}`).join('\n').slice(0, 28_000))
   return `請校正文句並整理以下逐字稿，輸出語言為${outputLanguage}。只修正口語贅詞、明顯錯字、重複語句與不自然表達，不得新增逐字稿沒有提到的事實、人名、數字或結論。保留每一段的原本順序與語意。只輸出 JSON 陣列，格式為 [{"index":0,"text":"修飾後文字"}]；index 必須對應原段落，不能遺漏段落。\n\n逐字稿段落：\n${rows}`
 }
 
