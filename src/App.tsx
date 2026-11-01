@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import './styles.css'
 import type { GlossarySuggestion, GlossaryTerm, Language, MeetingOutput, ModelInfo, ProviderConfig, ProviderId, ReasoningEffort, RecordTemplate, ReferenceDocument, TranscriptSegment } from './types'
-import { CGU_DEFAULT_MODEL, GOOGLE_AI_STUDIO_BASE_URL, GOOGLE_AI_STUDIO_LEGACY_BASE_URL, GOOGLE_DEFAULT_MODEL, PROVIDERS, generateText, isAllowedTextModel, listModels, preferredGoogleModel, providerLabel } from './lib/providers'
+import { CGU_DEFAULT_MODEL, GOOGLE_AI_STUDIO_BASE_URL, GOOGLE_AI_STUDIO_LEGACY_BASE_URL, GOOGLE_DEFAULT_MODEL, PROVIDERS, generateText, isAllowedCguModel, isAllowedTextModel, listModels, preferredGoogleModel, providerLabel } from './lib/providers'
 import { readReference } from './lib/references'
 import { cleanPlainTextOutput, createAnnouncementEmailPrompt, createGlossaryPrompt, createPolishedTranscriptPrompt, createPrompt, createWorkgroupSummaryPrompt, extractPlainTextSection, parseGlossarySuggestions, parsePolishedTranscript } from './lib/outputs'
 import { transcribe } from './lib/transcription'
@@ -35,7 +35,7 @@ function initialProviderConfig(): ProviderConfig {
     const saved = raw ? JSON.parse(raw) as Partial<ProviderConfig> : {}
     const id = PROVIDERS.some((provider) => provider.id === saved.id) ? saved.id as ProviderId : defaultProvider
     const provider = PROVIDERS.find((item) => item.id === id)!
-    const modelId = typeof saved.modelId === 'string' && isAllowedTextModel(saved.modelId)
+    const modelId = typeof saved.modelId === 'string' && isAllowedTextModel(saved.modelId) && (id !== 'cgu' || isAllowedCguModel(saved.modelId))
       ? saved.modelId
       : id === 'google' ? GOOGLE_DEFAULT_MODEL : id === 'cgu' ? CGU_DEFAULT_MODEL : undefined
     const savedBaseUrl = typeof saved.baseUrl === 'string' ? saved.baseUrl : ''
@@ -250,14 +250,14 @@ export default function App() {
   }
 
   const updateApiKey = (apiKey: string) => {
-    setConfig((current) => ({ ...current, apiKey, modelId: undefined }))
+    setConfig((current) => ({ ...current, apiKey, modelId: current.id === 'cgu' ? CGU_DEFAULT_MODEL : undefined }))
     setModels([])
     setModelTestStatus('idle')
     setConnectionTestStatus('idle')
   }
 
   const updateBaseUrl = (baseUrl: string) => {
-    setConfig((current) => ({ ...current, baseUrl, modelId: undefined }))
+    setConfig((current) => ({ ...current, baseUrl, modelId: current.id === 'cgu' ? CGU_DEFAULT_MODEL : undefined }))
     setModels([])
     setModelTestStatus('idle')
     setConnectionTestStatus('idle')
@@ -401,7 +401,9 @@ export default function App() {
       const result = await listModels(config)
       const selectedModelId = result.some((model) => model.id === config.modelId)
         ? config.modelId
-        : config.id === 'google' ? preferredGoogleModel(result) : result[0]?.id
+        : config.id === 'google' ? preferredGoogleModel(result)
+          : config.id === 'cgu' && result.some((model) => model.id === CGU_DEFAULT_MODEL) ? CGU_DEFAULT_MODEL
+            : result[0]?.id
       setModels(result)
       setConfig((current) => ({ ...current, modelId: selectedModelId }))
       setModelTestStatus(result.length ? 'available' : 'empty')

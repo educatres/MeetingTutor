@@ -5,6 +5,7 @@ export const GOOGLE_AI_STUDIO_BASE_URL = 'https://generativelanguage.googleapis.
 export const GOOGLE_AI_STUDIO_LEGACY_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
 export const GOOGLE_DEFAULT_MODEL = 'gemini-flash-lite-latest'
 export const CGU_DEFAULT_MODEL = 'gpt-oss:20b'
+export const CGU_ALLOWED_MODEL_IDS = ['gemma-4-26b-a4b-it', 'gpt-oss:20b', 'gpt-oss-120b'] as const
 
 export const PROVIDERS: Array<{ id: ProviderId; label: string; defaultBaseUrl: string; hint: string }> = [
   { id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', hint: '支援 OpenAI 相容的 models 與 chat/completions。' },
@@ -25,7 +26,13 @@ export function isAllowedTextModel(model: string | Pick<ModelInfo, 'id' | 'displ
     || normalized.includes('gemma-4')
     || normalized.includes('gpt-oss:20b')
     || normalized.includes('gpt-oss:120b')
+    || normalized.includes('gpt-oss-120b')
     || normalized.includes('pgt-oss:120b')
+}
+
+export function isAllowedCguModel(model: string | Pick<ModelInfo, 'id' | 'displayName'>) {
+  const id = typeof model === 'string' ? model : model.id
+  return CGU_ALLOWED_MODEL_IDS.includes(id.toLowerCase() as typeof CGU_ALLOWED_MODEL_IDS[number])
 }
 
 function isGoogleAiStudioEndpoint(baseUrl: string) {
@@ -101,6 +108,9 @@ function sortModels(config: ProviderConfig, models: ModelInfo[]): ModelInfo[] {
   return models
     .map((model, index) => ({ model, index, luna: /luna/i.test(`${model.id} ${model.displayName}`) }))
     .sort((left, right) => {
+      const leftRank = CGU_ALLOWED_MODEL_IDS.indexOf(left.model.id.toLowerCase() as typeof CGU_ALLOWED_MODEL_IDS[number])
+      const rightRank = CGU_ALLOWED_MODEL_IDS.indexOf(right.model.id.toLowerCase() as typeof CGU_ALLOWED_MODEL_IDS[number])
+      if (leftRank !== rightRank) return leftRank - rightRank
       // CGU's Luna family is the preferred default. The API's timestamp (when
       // supplied) wins; a semantic version then provides a useful fallback.
       if (left.luna !== right.luna) return left.luna ? -1 : 1
@@ -180,7 +190,8 @@ export async function listModels(config: ProviderConfig): Promise<ModelInfo[]> {
     const id = String(model.id ?? model.name ?? '')
     return { id: id.replace(/^models\//, ''), displayName: model.displayName || id, capabilities: ['text-generation'], source: config.id, created: modelTimestamp(model) }
   }).filter((model: ModelInfo) => model.id)
-  return sortModels(config, models.filter(isAllowedTextModel))
+  const allowedModels = models.filter(isAllowedTextModel)
+  return sortModels(config, config.id === 'cgu' ? allowedModels.filter(isAllowedCguModel) : allowedModels)
 }
 
 function responsesText(body: any): string {
