@@ -1,10 +1,15 @@
 import type { ModelInfo, ProviderConfig, ProviderId } from '../types'
 import { PROTECTED_SYSTEM_INSTRUCTIONS, scanPromptInjection, userSystemInstructions } from './security'
 
+export const GOOGLE_AI_STUDIO_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai'
+export const GOOGLE_AI_STUDIO_LEGACY_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
+export const GOOGLE_DEFAULT_MODEL = 'gemini-flash-lite-latest'
+export const CGU_DEFAULT_MODEL = 'gpt-oss:20b'
+
 export const PROVIDERS: Array<{ id: ProviderId; label: string; defaultBaseUrl: string; hint: string }> = [
   { id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', hint: '支援 OpenAI 相容的 models 與 chat/completions。' },
   { id: 'xai', label: 'Grok（xAI）', defaultBaseUrl: 'https://api.x.ai/v1', hint: '以 xAI 的 OpenAI 相容 API 為基線。' },
-  { id: 'google', label: 'Google Gemini', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta', hint: '使用 Gemini models 與 generateContent。' },
+  { id: 'google', label: 'Google AI Studio', defaultBaseUrl: GOOGLE_AI_STUDIO_BASE_URL, hint: '使用 Google AI Studio API Key 與 OpenAI 相容的 models/chat/completions。' },
   { id: 'cgu', label: 'CGU', defaultBaseUrl: 'https://air.cgu.edu.tw/cgullmapi/v1', hint: '使用 CGU LLM API v1；若瀏覽器遭到 CORS 阻擋，請依 CGU 服務政策處理。' },
 ]
 
@@ -13,13 +18,44 @@ const cleanBaseUrl = (value: string) => value.replace(/\/$/, '')
 export function isAllowedTextModel(model: string | Pick<ModelInfo, 'id' | 'displayName'>) {
   const label = typeof model === 'string' ? model : `${model.id} ${model.displayName}`
   const normalized = label.toLowerCase()
-  return normalized.includes('luna')
+  return normalized.includes('gemini')
+    || normalized.includes('luna')
     || normalized.includes('nemotron')
     || normalized.includes('mistral')
     || normalized.includes('gemma-4')
     || normalized.includes('gpt-oss:20b')
     || normalized.includes('gpt-oss:120b')
     || normalized.includes('pgt-oss:120b')
+}
+
+function isGoogleAiStudioEndpoint(baseUrl: string) {
+  return /\/openai\/?$/i.test(baseUrl)
+}
+
+function geminiVersion(model: ModelInfo): number[] {
+  const match = `${model.id} ${model.displayName}`.match(/gemini[^0-9]*(\d+(?:\.\d+)*)/i)
+  return match ? match[1].split('.').map(Number) : []
+}
+
+function compareModelVersions(left: number[], right: number[]) {
+  const length = Math.max(left.length, right.length)
+  for (let index = 0; index < length; index += 1) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0)
+    if (difference !== 0) return difference
+  }
+  return 0
+}
+
+export function preferredGoogleModel(models: ModelInfo[]) {
+  const flashLite = models.filter((model) => /flash-lite/i.test(`${model.id} ${model.displayName}`))
+  if (!flashLite.length) return models[0]?.id
+  const latestAlias = flashLite.find((model) => /flash-lite-latest/i.test(model.id))
+  if (latestAlias) return latestAlias.id
+  return [...flashLite].sort((left, right) => {
+    const versionDifference = compareModelVersions(geminiVersion(right), geminiVersion(left))
+    if (versionDifference !== 0) return versionDifference
+    return left.id.localeCompare(right.id)
+  })[0].id
 }
 
 function parseTimestamp(value: unknown): number | undefined {
@@ -117,7 +153,16 @@ export function providerLabel(id: ProviderId) {
 export async function listModels(config: ProviderConfig): Promise<ModelInfo[]> {
   if (!config.apiKey.trim()) throw new Error('請先輸入 API Key。')
   if (config.id === 'google') {
-    const base = cleanBaseUrl(config.baseUrl || 'https://generativelanguage.googleapis.com/v1beta')
+    const base = cleanBaseUrl(config.baseUrl || GOOGLE_AI_STUDIO_BASE_URL)
+    if (isGoogleAiStudioEndpoint(base)) {
+      const body = await responseJson(await request(`${base}/models`, { method: 'GET', headers: authHeaders(config.apiKey) }))
+      const rows = Array.isArray(body) ? body : body.data ?? body.models ?? []
+      const models = rows.map((model: any) => {
+        const id = String(model.id ?? model.name ?? '').replace(/^models\//, '')
+        return { id, displayName: model.displayName || model.name || id, capabilities: ['text-generation'], source: 'google' as const, created: modelTimestamp(model) }
+      }).filter((model: ModelInfo) => model.id)
+      return models.filter(isAllowedTextModel)
+    }
     const body = await responseJson(await request(`${base}/models?key=${encodeURIComponent(config.apiKey)}`, { method: 'GET' }))
     const models = (body.models ?? []).filter((model: any) => (model.supportedGenerationMethods ?? []).includes('generateContent')).map((model: any) => ({
       id: String(model.name ?? '').replace(/^models\//, ''),
@@ -157,7 +202,18 @@ export async function generateText(config: ProviderConfig, prompt: string, syste
   }
   const instructions = [userSystemInstructions(systemPrompt), PROTECTED_SYSTEM_INSTRUCTIONS].filter(Boolean).join('\n\n')
   if (config.id === 'google') {
-    const base = cleanBaseUrl(config.baseUrl || 'https://generativelanguage.googleapis.com/v1beta')
+    const base = cleanBaseUrl(config.baseUrl || GOOGLE_AI_STUDIO_BASE_URL)
+    if (isGoogleAiStudioEndpoint(base)) {
+      const messages = instructions
+        ? [{ role: 'system', content: instructions }, { role: 'user', content: prompt }]
+        : [{ role: 'user', content: prompt }]
+      const body = await responseJson(await request(`${base}/chat/completions`, {
+        method: 'POST', headers: authHeaders(config.apiKey), body: JSON.stringify({ model, messages, temperature: 0.1 }),
+      }, 120_000))
+      const text = body.choices?.[0]?.message?.content || ''
+      if (!text) throw new Error('模型已回應，但沒有可讀取的文字內容。')
+      return text
+    }
     const requestBody: Record<string, unknown> = { contents: [{ role: 'user', parts: [{ text: prompt }] }] }
     if (instructions) requestBody.systemInstruction = { parts: [{ text: instructions }] }
     const body = await responseJson(await request(`${base}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(config.apiKey)}`, {
