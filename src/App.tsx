@@ -96,6 +96,7 @@ function downloadTextFile(name: string, content: string) {
 }
 
 type ModelTestStatus = 'idle' | 'testing' | 'available' | 'empty' | 'error'
+type ConnectionTestStatus = 'idle' | 'testing' | 'success' | 'error'
 type GenerationStatus = { kind: 'working' | 'success' | 'error'; message: string }
 const RECORD_TEMPLATE_OPTIONS: Array<{ id: RecordTemplate; label: string; headings: string }> = [
   { id: 'meeting', label: '會議記錄摘要', headings: '會議摘要、討論重點、決議事項、待辦事項、後續安排' },
@@ -135,6 +136,7 @@ export default function App() {
   const [config, setConfig] = useState<ProviderConfig>(initialProviderConfig)
   const [models, setModels] = useState<ModelInfo[]>([])
   const [modelTestStatus, setModelTestStatus] = useState<ModelTestStatus>('idle')
+  const [connectionTestStatus, setConnectionTestStatus] = useState<ConnectionTestStatus>('idle')
   const [systemPrompt, setSystemPrompt] = useState(storedSystemPrompt)
   const [status, setStatus] = useState('狀態/進度')
   const [busy, setBusy] = useState(false)
@@ -244,18 +246,21 @@ export default function App() {
     setConfig({ id, apiKey: storedApiKey(id), baseUrl: provider.defaultBaseUrl, modelId: id === 'google' ? GOOGLE_DEFAULT_MODEL : id === 'cgu' ? CGU_DEFAULT_MODEL : undefined, reasoningEffort: id === 'cgu' ? 'medium' : undefined })
     setModels([])
     setModelTestStatus('idle')
+    setConnectionTestStatus('idle')
   }
 
   const updateApiKey = (apiKey: string) => {
     setConfig((current) => ({ ...current, apiKey, modelId: undefined }))
     setModels([])
     setModelTestStatus('idle')
+    setConnectionTestStatus('idle')
   }
 
   const updateBaseUrl = (baseUrl: string) => {
     setConfig((current) => ({ ...current, baseUrl, modelId: undefined }))
     setModels([])
     setModelTestStatus('idle')
+    setConnectionTestStatus('idle')
   }
 
   const onAudioChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -390,6 +395,7 @@ export default function App() {
   const testProvider = async () => {
     setBusy(true)
     setModelTestStatus('testing')
+    setConnectionTestStatus('idle')
     setStatus(`正在測試 ${providerLabel(config.id)} 並讀取模型…`)
     try {
       const result = await listModels(config)
@@ -408,11 +414,33 @@ export default function App() {
     } finally { setBusy(false) }
   }
 
+  const testConnection = async () => {
+    if (!config.apiKey.trim() || !config.modelId) {
+      setConnectionTestStatus('error')
+      setStatus('請先輸入 API Key、測試 Key 並選擇模型，再測試連線。')
+      return
+    }
+    setBusy(true)
+    setConnectionTestStatus('testing')
+    setStatus(`正在測試 ${providerLabel(config.id)} 的模型連線…`)
+    try {
+      const response = await generateText(config, '請只回覆 OK。', '')
+      if (!response.trim()) throw new Error('API 回傳了空白內容。')
+      setConnectionTestStatus('success')
+      setStatus(`連線成功：${providerLabel(config.id)} 已正常回傳模型內容。`)
+    } catch (error) {
+      setConnectionTestStatus('error')
+      setSettingsOpen(true)
+      setStatus(`連線失敗：${error instanceof Error ? error.message : String(error)}`)
+    } finally { setBusy(false) }
+  }
+
   const clearApiKeys = () => {
     try { window.localStorage.removeItem(API_KEYS_STORAGE_KEY) } catch { /* Keep going if storage is unavailable. */ }
     setConfig((current) => ({ ...current, apiKey: '', modelId: undefined }))
     setModels([])
     setModelTestStatus('idle')
+    setConnectionTestStatus('idle')
     setSettingsOpen(true)
     setStatus('已清除瀏覽器中保存的 API Key。')
   }
@@ -553,7 +581,7 @@ export default function App() {
       {settingsOpen && <section className="ai-settings-panel" aria-label="連接你的AI">
         <div className="settings-panel-heading"><div><h2>連接你的AI</h2><p>設定會保存在此瀏覽器；連線正常時，下次開啟可直接沿用。（長庚大學師生請選擇「CGU」，即可使用您的 CGU API Key；您輸入的 API Key 僅儲存在您的瀏覽器中，請勿外流。）需要 Google AI Studio 金鑰時，請前往 <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer">Google AI Studio 官方網站</a>，登入後點選「Get API key」與「Create API key」，選擇既有或新建專案，複製以 <code>AIza</code> 開頭的金鑰貼入上方欄位並妥善保存。</p></div><button className="settings-close-button" type="button" onClick={() => setSettingsOpen(false)} aria-label="關閉連接你的AI" title="關閉">×</button></div>
         <div className="provider-grid"><label className="field"><span>Provider</span><select value={config.id} onChange={(e) => updateProvider(e.target.value as ProviderId)} disabled={busy}>{PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label><label className="field"><span>API Key（保存在本機瀏覽器）</span><div className="key-input"><input type={showKey ? 'text' : 'password'} value={config.apiKey} onChange={(e) => updateApiKey(e.target.value)} autoComplete="off" placeholder="貼上你的 Key" disabled={busy} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? '隱藏' : '顯示'}</button><button type="button" onClick={clearApiKeys} disabled={busy}>清除 API Key</button></div></label><label className="field"><span>API Base URL</span><input value={config.baseUrl ?? ''} onChange={(e) => updateBaseUrl(e.target.value)} disabled={busy} /></label>{config.id === 'cgu' && <label className="field"><span>CGU 推理程度（預設：中）</span><select value={config.reasoningEffort ?? 'medium'} onChange={(e) => setConfig((current) => ({ ...current, reasoningEffort: e.target.value as ReasoningEffort }))} disabled={busy}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>}</div>
-        <p className="hint">{PROVIDERS.find((provider) => provider.id === config.id)?.hint}</p><button className="secondary" onClick={testProvider} disabled={busy || !config.apiKey}>{busy ? '測試中…' : config.modelId ? '重新測試並更新模型' : '測試 Key 並讀取模型'}</button>{modelTestStatus === 'available' && <p className="model-available" role="status">模型可用（已讀取 {models.length} 個），設定已自動保存。</p>}{modelTestStatus === 'empty' && <p className="model-unavailable" role="status">測試成功，但沒有可列舉的模型。</p>}{modelTestStatus === 'error' && <p className="model-unavailable" role="alert">模型呼叫失敗，請檢查 Key、Base URL、模型或服務狀態。</p>}{config.modelId && !models.length && modelTestStatus !== 'error' && <p className="stored-model">已保存模型：{config.modelId}</p>}{models.length > 0 && <label className="field model-select"><span>選擇模型</span><select value={config.modelId ?? ''} onChange={(e) => setConfig({ ...config, modelId: e.target.value })}>{models.map((model) => <option key={model.id} value={model.id}>{model.displayName}（{model.id}）</option>)}</select></label>}
+        <p className="hint">{PROVIDERS.find((provider) => provider.id === config.id)?.hint}</p><div className="provider-test-actions"><button className="secondary" onClick={testProvider} disabled={busy || !config.apiKey}>{busy ? '測試中…' : config.modelId ? '重新測試並更新模型' : '測試 Key 並讀取模型'}</button><button className="secondary" onClick={testConnection} disabled={busy || !config.apiKey || !config.modelId}>{connectionTestStatus === 'testing' ? '\u6e2c\u8a66\u9023\u7dda\u4e2d\u2026' : '\u6e2c\u8a66\u9023\u7dda'}</button></div>{modelTestStatus === 'available' && <p className="model-available" role="status">模型可用（已讀取 {models.length} 個），設定已自動保存。</p>}{modelTestStatus === 'empty' && <p className="model-unavailable" role="status">測試成功，但沒有可列舉的模型。</p>}{modelTestStatus === 'error' && <p className="model-unavailable" role="alert">模型呼叫失敗，請檢查 Key、Base URL、模型或服務狀態。</p>}{connectionTestStatus === 'success' && <p className="connection-test-success" role="status">{'\u9023\u7dda\u6210\u529f\uff0c\u5df2\u6536\u5230\u6a21\u578b\u56de\u50b3\u3002'}</p>}{connectionTestStatus === 'error' && <p className="connection-test-error" role="alert">{'\u9023\u7dda\u6e2c\u8a66\u5931\u6557\uff0c\u8acb\u6aa2\u67e5 API Key\u3001Base URL \u8207\u6a21\u578b\u3002'}</p>}{config.modelId && !models.length && modelTestStatus !== 'error' && <p className="stored-model">已保存模型：{config.modelId}</p>}{models.length > 0 && <label className="field model-select"><span>選擇模型</span><select value={config.modelId ?? ''} onChange={(e) => { setConfig({ ...config, modelId: e.target.value }); setConnectionTestStatus('idle') }}>{models.map((model) => <option key={model.id} value={model.id}>{model.displayName}（{model.id}）</option>)}</select></label>}
       </section>}
     </header>
 
