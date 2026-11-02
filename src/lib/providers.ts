@@ -7,10 +7,10 @@ export const GOOGLE_DEFAULT_MODEL = 'gemini-flash-lite-latest'
 export const CGU_DEFAULT_MODEL = 'gpt-oss:20b'
 export const CGU_ALLOWED_MODEL_IDS = ['gemma-4-26b-a4b-it', 'gpt-oss:20b', 'gpt-oss-120b'] as const
 
-export const PROVIDERS: Array<{ id: ProviderId; label: string; defaultBaseUrl: string; hint: string }> = [
-  { id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', hint: '支援 OpenAI 相容的 models 與 chat/completions。' },
-  { id: 'xai', label: 'Grok（xAI）', defaultBaseUrl: 'https://api.x.ai/v1', hint: '以 xAI 的 OpenAI 相容 API 為基線。' },
-  { id: 'google', label: 'Google AI Studio', defaultBaseUrl: GOOGLE_AI_STUDIO_BASE_URL, hint: '使用 Google AI Studio API Key 與 OpenAI 相容的 models/chat/completions。' },
+export const PROVIDERS: Array<{ id: ProviderId; label: string; defaultBaseUrl: string; hint: string; disabled?: boolean }> = [
+  { id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', hint: '支援 OpenAI 相容的 models 與 chat/completions。', disabled: true },
+  { id: 'xai', label: 'Grok（xAI）', defaultBaseUrl: 'https://api.x.ai/v1', hint: '以 xAI 的 OpenAI 相容 API 為基線。', disabled: true },
+  { id: 'google', label: 'Google AI Studio', defaultBaseUrl: GOOGLE_AI_STUDIO_BASE_URL, hint: '使用 Google AI Studio API Key 與 OpenAI 相容的 models/chat/completions。Google AI Studio 建議用 gemini-flash-lite-latest 模型。' },
   { id: 'cgu', label: 'CGU', defaultBaseUrl: 'https://air.cgu.edu.tw/cgullmapi/v1', hint: '使用 CGU LLM API v1；若瀏覽器遭到 CORS 阻擋，請依 CGU 服務政策處理。' },
 ]
 
