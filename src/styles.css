@@ -76,6 +76,7 @@ button { cursor: pointer; }
 .transcript-upload-row { margin-top: 8px; }
 .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 190px; }
 .field > span { font-size: 13px; color: #516370; font-weight: 700; }
+.api-base-url { margin: 0; padding: 10px 0; color: #253640; font-size: 14px; overflow-wrap: anywhere; }
 .field input, .field select, .glossary-form input, .glossary-form select, .glossary-input, .key-input input { width: 100%; border: 1px solid #bdcbd3; border-radius: 7px; padding: 10px 11px; color: #253640; background: #fff; }
 .key-input { display: flex; gap: 5px; min-width: 0; }
 .key-input button { border: 1px solid #bdcbd3; background: #f4f7f8; border-radius: 6px; padding: 0 10px; white-space: nowrap; }
