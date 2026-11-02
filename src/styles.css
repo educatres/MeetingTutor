@@ -22,6 +22,7 @@ button { cursor: pointer; }
 .hardware-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .hardware-note { max-width: 760px !important; font-size: 14px; }
 .header-actions { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin-left: auto; min-width: 0; }
+.guide-actions { display: flex; align-items: stretch; flex-wrap: wrap; gap: 8px; }
 .google-api-key-guide-button, .quick-start-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #f0c36a; background: #fff3d6; color: #784f0c; border-radius: 7px; padding: 8px 12px; font-weight: 800; white-space: nowrap; text-decoration: none; }
 .google-api-key-guide-button:hover, .quick-start-button:hover { background: #f5c55f; color: #4b3308; }
 .teams-mobile-guide-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #9ca9e8; background: #eef0ff; color: #363b83; border-radius: 7px; padding: 8px 12px; font-weight: 800; white-space: nowrap; text-decoration: none; }
@@ -196,7 +197,7 @@ button { cursor: pointer; }
   .header-actions { width: 100%; flex-wrap: wrap; }
   .header-actions > * { min-width: 0; }
   .header-actions > button { flex: 1; }
-  .header-actions > .google-api-key-guide-button, .header-actions > .quick-start-button, .header-actions > .teams-mobile-guide-button { flex: 1; }
+  .guide-actions > a { flex: 1 1 200px; }
   .google-api-key-guide-button, .quick-start-button, .teams-mobile-guide-button { min-width: 0; }
   .settings-toggle { max-width: 100%; }
   .meeting-admin-help { align-items: stretch; flex-direction: column; gap: 12px; }
@@ -239,7 +240,7 @@ button { cursor: pointer; }
   .hero h1 { font-size: 18px; }
   .hero-heading-row { gap: 8px; }
   .header-actions { gap: 6px; }
-  .header-actions > button, .header-actions > .google-api-key-guide-button, .header-actions > .quick-start-button, .header-actions > .teams-mobile-guide-button { flex: 1 1 100%; width: 100%; }
+  .header-actions > button, .guide-actions > a { flex: 1 1 100%; width: 100%; }
   .workspace { width: calc(100% - 16px); margin: 10px auto; gap: 10px; }
   .panel, .meeting-admin-panel { padding: 12px; border-radius: 9px; }
   .ai-settings-panel, .test-preview-panel { padding: 12px; }
