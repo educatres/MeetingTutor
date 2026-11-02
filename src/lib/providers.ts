@@ -11,7 +11,7 @@ export const PROVIDERS: Array<{ id: ProviderId; label: string; defaultBaseUrl: s
   { id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1', hint: '支援 OpenAI 相容的 models 與 chat/completions。', disabled: true },
   { id: 'xai', label: 'Grok（xAI）', defaultBaseUrl: 'https://api.x.ai/v1', hint: '以 xAI 的 OpenAI 相容 API 為基線。', disabled: true },
   { id: 'google', label: 'Google AI Studio', defaultBaseUrl: GOOGLE_AI_STUDIO_BASE_URL, hint: 'Google AI Studio 建議用 gemini-flash-lite-latest 模型。' },
-  { id: 'cgu', label: 'CGU', defaultBaseUrl: 'https://air.cgu.edu.tw/cgullmapi/v1', hint: '使用 CGU LLM API v1；若瀏覽器遭到 CORS 阻擋，請依 CGU 服務政策處理。' },
+  { id: 'cgu', label: 'CGU', defaultBaseUrl: 'https://air.cgu.edu.tw/cgullmapi/v1', hint: 'CGU API 模型建議使用 gemma-4-26b-a4b-it' },
 ]
 
 const cleanBaseUrl = (value: string) => value.replace(/\/$/, '')
