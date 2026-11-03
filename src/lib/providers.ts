@@ -126,11 +126,13 @@ function sortModels(config: ProviderConfig, models: ModelInfo[]): ModelInfo[] {
     .map(({ model }) => model)
 }
 
-async function request(url: string, init: RequestInit, timeoutMs = 30_000): Promise<Response> {
+async function requestJson(url: string, init: RequestInit): Promise<any> {
+  const timeoutMs = 240_000
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
   try {
-    return await fetch(url, { ...init, signal: controller.signal })
+    const response = await fetch(url, { ...init, signal: controller.signal })
+    return await responseJson(response)
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new Error(`API 請求超過 ${Math.round(timeoutMs / 1000)} 秒未完成，請稍後再試或改用較快的模型。`)
@@ -165,7 +167,7 @@ export async function listModels(config: ProviderConfig): Promise<ModelInfo[]> {
   if (config.id === 'google') {
     const base = cleanBaseUrl(config.baseUrl || GOOGLE_AI_STUDIO_BASE_URL)
     if (isGoogleAiStudioEndpoint(base)) {
-      const body = await responseJson(await request(`${base}/models`, { method: 'GET', headers: authHeaders(config.apiKey) }))
+      const body = await requestJson(`${base}/models`, { method: 'GET', headers: authHeaders(config.apiKey) })
       const rows = Array.isArray(body) ? body : body.data ?? body.models ?? []
       const models = rows.map((model: any) => {
         const id = String(model.id ?? model.name ?? '').replace(/^models\//, '')
@@ -173,7 +175,7 @@ export async function listModels(config: ProviderConfig): Promise<ModelInfo[]> {
       }).filter((model: ModelInfo) => model.id)
       return models.filter(isAllowedTextModel)
     }
-    const body = await responseJson(await request(`${base}/models?key=${encodeURIComponent(config.apiKey)}`, { method: 'GET' }))
+    const body = await requestJson(`${base}/models?key=${encodeURIComponent(config.apiKey)}`, { method: 'GET' })
     const models = (body.models ?? []).filter((model: any) => (model.supportedGenerationMethods ?? []).includes('generateContent')).map((model: any) => ({
       id: String(model.name ?? '').replace(/^models\//, ''),
       displayName: model.displayName || model.name,
@@ -184,7 +186,7 @@ export async function listModels(config: ProviderConfig): Promise<ModelInfo[]> {
     return sortModels(config, models.filter(isAllowedTextModel))
   }
   const base = cleanBaseUrl(config.baseUrl || PROVIDERS.find((p) => p.id === config.id)?.defaultBaseUrl || '')
-  const body = await responseJson(await request(`${base}/models`, { method: 'GET', headers: authHeaders(config.apiKey) }))
+  const body = await requestJson(`${base}/models`, { method: 'GET', headers: authHeaders(config.apiKey) })
   const rows = Array.isArray(body) ? body : body.data ?? body.models ?? []
   const models = rows.map((model: any) => {
     const id = String(model.id ?? model.name ?? '')
@@ -218,18 +220,18 @@ export async function generateText(config: ProviderConfig, prompt: string, syste
       const messages = instructions
         ? [{ role: 'system', content: instructions }, { role: 'user', content: prompt }]
         : [{ role: 'user', content: prompt }]
-      const body = await responseJson(await request(`${base}/chat/completions`, {
+      const body = await requestJson(`${base}/chat/completions`, {
         method: 'POST', headers: authHeaders(config.apiKey), body: JSON.stringify({ model, messages, temperature: 0.1 }),
-      }, 120_000))
+      })
       const text = body.choices?.[0]?.message?.content || ''
       if (!text) throw new Error('模型已回應，但沒有可讀取的文字內容。')
       return text
     }
     const requestBody: Record<string, unknown> = { contents: [{ role: 'user', parts: [{ text: prompt }] }] }
     if (instructions) requestBody.systemInstruction = { parts: [{ text: instructions }] }
-    const body = await responseJson(await request(`${base}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(config.apiKey)}`, {
+    const body = await requestJson(`${base}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(config.apiKey)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody),
-    }, 120_000))
+    })
     const text = body.candidates?.[0]?.content?.parts?.map((part: any) => part.text || '').join('') || ''
     if (!text) throw new Error('模型已回應，但沒有可讀取的文字內容。')
     return text
@@ -241,11 +243,11 @@ export async function generateText(config: ProviderConfig, prompt: string, syste
   if (config.id === 'cgu' && /luna/i.test(model)) {
     const requestBody: Record<string, unknown> = { model, input: prompt, max_output_tokens: 4096, reasoning: { effort: config.reasoningEffort ?? 'medium' } }
     if (instructions) requestBody.instructions = instructions
-    const body = await responseJson(await request(`${base}/responses`, {
+    const body = await requestJson(`${base}/responses`, {
       method: 'POST',
       headers: authHeaders(config.apiKey),
       body: JSON.stringify(requestBody),
-    }, 120_000))
+    })
     const text = responsesText(body)
     if (!text) throw new Error('模型已回應，但沒有可讀取的文字內容。')
     return text
@@ -259,9 +261,9 @@ export async function generateText(config: ProviderConfig, prompt: string, syste
   } else {
     requestBody.temperature = 0.1
   }
-  const body = await responseJson(await request(`${base}/chat/completions`, {
+  const body = await requestJson(`${base}/chat/completions`, {
     method: 'POST', headers: authHeaders(config.apiKey), body: JSON.stringify(requestBody),
-  }, 120_000))
+  })
   const text = body.choices?.[0]?.message?.content || ''
   if (!text) throw new Error('模型已回應，但沒有可讀取的文字內容。')
   return text
