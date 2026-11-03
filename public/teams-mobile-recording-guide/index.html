@@ -34,7 +34,8 @@
     .brand { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 16px; color: var(--brand-dark); font-size: 14px; font-weight: 800; letter-spacing: .04em; }
     .brand::before { width: 11px; height: 11px; border-radius: 50%; background: var(--brand); content: ""; }
     h1, h2, h3, p { margin-top: 0; }
-    h1 { max-width: 780px; margin-bottom: 14px; font-size: clamp(30px, 5vw, 48px); line-height: 1.2; letter-spacing: -.035em; }
+    h1 { max-width: 780px; margin-bottom: 14px; font-size: clamp(18px, 3vw, 28.8px); line-height: 1.2; letter-spacing: -.035em; }
+    .hero-image { display: block; max-width: 100%; height: auto; margin-bottom: 14px; }
     .lead { max-width: 720px; margin-bottom: 0; color: var(--muted); font-size: clamp(16px, 2vw, 19px); }
     .overview { display: grid; grid-template-columns: 1.2fr .8fr; gap: 22px; margin-bottom: 34px; }
     .overview-card, .notice, .step-card { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 8px 24px rgba(25, 38, 76, .05); }
@@ -83,6 +84,7 @@
     <header class="hero">
       <p class="brand">MEETINGTUTOR × MICROSOFT TEAMS</p>
       <h1>用 Teams 手機版錄下會議，交給 MeetingTutor 整理</h1>
+      <img class="hero-image" src="TeamsRcording.png" alt="Teams 手機版會議錄製畫面">
       <p class="lead">跟著這四個畫面，在 Teams 行動版開啟「錄製和謄寫」。會議結束後即可從 Teams 取得逐字稿，匯入 MeetingTutor 製作會議記錄。</p>
     </header>
 
